@@ -1,0 +1,13 @@
+services:
+  loan-report-qas:
+    build: .
+    image: loan-report-qas:1.0.0
+    container_name: loan-report-qas
+    ports:
+      - "3000:3000"
+    volumes:
+      # SQLite 数据库文件持久化目录（备份 = 拷贝该目录）
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped

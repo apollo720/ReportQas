@@ -1,0 +1,6 @@
+node_modules/
+data/
+.gui/
+*.log
+.DS_Store
+.zcode/
