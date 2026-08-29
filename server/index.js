@@ -15,8 +15,8 @@ const WEB_DIR = path.join(__dirname, '..', 'web');
 app.disable('x-powered-by');
 app.use(express.json({ limit: '2mb' }));
 
-/* 首次启动灌入演示数据 */
-if (seedIfEmpty()) {
+/* 演示数据：默认空库时灌入；生产部署设 LR_SEED_DEMO=0 跳过（内置角色与 admin 账号仍自动创建） */
+if (process.env.LR_SEED_DEMO !== '0' && seedIfEmpty()) {
   console.log('[boot] 首次启动，已灌入演示数据');
 }
 
@@ -24,7 +24,7 @@ if (seedIfEmpty()) {
 ensureBuiltin();
 
 /* API 路由 */
-app.get('/api/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
+app.get('/api/health', (req, res) => res.json({ ok: true, ts: Date.now(), demo: process.env.LR_SEED_DEMO !== '0' }));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api', require('./routes/meta'));
 app.use('/api', require('./routes/master'));

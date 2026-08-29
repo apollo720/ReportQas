@@ -19,6 +19,8 @@
       var store = global.LRStore;
       var form = Vue.reactive({ no: '', password: '' });
       var loading = Vue.ref(false);
+      /* 演示模式由后端下发（生产镜像 LR_SEED_DEMO=0 时不显示演示账号） */
+      var demoMode = Vue.ref(false);
 
       /* 演示账号一键填入（正式账号由管理员在员工管理中维护） */
       var demoAccounts = [
@@ -26,6 +28,10 @@
         { no: '901002', name: '周涛 · 审批负责人' },
         { no: '901003', name: '郑立群 · 超级管理员' }
       ];
+
+      Vue.onMounted(function () {
+        api.health().then(function (h) { demoMode.value = !!h.demo; }).catch(function () {});
+      });
 
       function fillDemo(acc) {
         form.no = acc.no;
@@ -47,7 +53,7 @@
       }
 
       return {
-        form: form, loading: loading, demoAccounts: demoAccounts, fillDemo: fillDemo, submit: submit, store: store
+        form: form, loading: loading, demoMode: demoMode, demoAccounts: demoAccounts, fillDemo: fillDemo, submit: submit, store: store
       };
     },
     template: [
@@ -77,7 +83,7 @@
       '      <t-button class="login__btn" theme="primary" size="large" :loading="loading" @click="submit">',
       '        <template #icon><t-icon name="login" /></template>登 录',
       '      </t-button>',
-      '      <div class="login__hint">',
+      '      <div v-if="demoMode" class="login__hint">',
       '        <strong>演示账号（点击填入）：</strong>',
       '        <div class="row gap-4" style="flex-wrap:wrap;margin-top:6px">',
       '          <t-link v-for="a in demoAccounts" :key="a.no" theme="primary" hover="color" @click="fillDemo(a)">{{ a.name }}</t-link>',

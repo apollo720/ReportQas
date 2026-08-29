@@ -1,0 +1,14 @@
+# 生产部署 compose —— 配合 docker load 导入的镜像使用，不灌演示数据。
+# 用法：docker compose -f docker-compose.prod.yml up -d
+services:
+  loan-report-qas:
+    image: loan-report-qas:1.0.1
+    container_name: loan-report-qas
+    ports:
+      - "3000:3000"
+    volumes:
+      # 生产数据库持久化目录：升级镜像 / 重建容器不影响该目录中的数据
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped

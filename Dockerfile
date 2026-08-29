@@ -7,7 +7,7 @@ RUN npm ci --omit=dev
 # 运行阶段：仅携带运行时必需文件；SQLite 内置于 Node 24（node:sqlite），无原生编译
 FROM node:24-alpine
 WORKDIR /app
-ENV NODE_ENV=production PORT=3000 TZ=Asia/Shanghai
+ENV NODE_ENV=production PORT=3000 TZ=Asia/Shanghai LR_SEED_DEMO=0
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./

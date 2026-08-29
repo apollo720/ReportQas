@@ -1,7 +1,7 @@
 services:
   loan-report-qas:
     build: .
-    image: loan-report-qas:1.0.0
+    image: loan-report-qas:1.0.1
     container_name: loan-report-qas
     ports:
       - "3000:3000"
@@ -10,4 +10,6 @@ services:
       - ./data:/app/data
     environment:
       - TZ=Asia/Shanghai
+      # 开发环境：灌入演示数据（生产镜像默认 LR_SEED_DEMO=0）
+      - LR_SEED_DEMO=1
     restart: unless-stopped

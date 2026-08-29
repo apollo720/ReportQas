@@ -42,6 +42,9 @@
   var api = {
     call: call,
 
+    /* ---- 公共 ---- */
+    health: function () { return call('GET', '/api/health'); },
+
     /* ---- 认证 ---- */
     login: function (no, password) { return call('POST', '/api/auth/login', { no: no, password: password }); },
     logout: function () { return call('POST', '/api/auth/logout'); },
