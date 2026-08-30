@@ -180,6 +180,21 @@ async function main() {
   const custId = r.data.id;
   r = await admin.call('PUT', `/api/customers/${custId}`, { scale: '中型' });
   check('编辑客户', r.status === 200);
+  r = await admin.call('GET', '/api/customers?keyword=编号规则测试客户');
+  check('删除前置客户', r.status === 200 && r.data.items.length === 0);
+  r = await admin.call('POST', '/api/customers', { name: '编号规则测试客户' });
+  const ruleCustId = r.data.id;
+  r = await admin.call('GET', '/api/customers?keyword=编号规则测试客户');
+  const ruleNo = r.data.items[0] ? r.data.items[0].no : '';
+  const ymd = new Date();
+  const ymdStr = ymd.getFullYear() + String(ymd.getMonth() + 1).padStart(2, '0') + String(ymd.getDate()).padStart(2, '0');
+  check('客户编号符合 KH+yyyymmdd+序号 规则', new RegExp('^KH' + ymdStr + '\\d{4}$').test(ruleNo), ruleNo);
+  r = await admin.call('DELETE', `/api/customers/${ruleCustId}`);
+  check('删除无关联客户成功', r.status === 200, r.data);
+  r = await admin.call('DELETE', '/api/customers/C001');
+  check('删除已关联台账的客户被拒绝', r.status === 400 && r.data.error.includes('台账'), r.data);
+  r = await reviewer.call('DELETE', '/api/customers/C002');
+  check('无客户删除权限删除被拒绝（403）', r.status === 403, r.data);
 
   r = await admin.call('POST', '/api/employees', {
     no: '901099', name: '冒烟审查员', orgId: 'ORG000', roleKeys: ['reviewer'], password: 'test123456'
@@ -244,6 +259,19 @@ async function main() {
   check('重复导入被去重跳过', r.data.imported === 0 && r.data.skipped.length === 2
     && r.data.skipped[0].reason.includes('重复') && r.data.skipped[1].reason.includes('机构'), r.data);
 
+  /* Excel「另存为 XML 表格 2003」格式导入台账 */
+  const toXml = (hdr, rows) => '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>'
+    + '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
+    + '<Worksheet ss:Name="导入"><Table>'
+    + [hdr, ...rows].map((cells) => '<Row>' + cells.map((c) => '<Cell><Data ss:Type="String">' + c + '</Data></Cell>').join('') + '</Row>').join('')
+    + '</Table></Worksheet></Workbook>';
+  const xmlLedgerRow = ['城东支行', '2026-08-29', '导入XML测试客户股份有限公司', '是', 660, '李文博', '', '李文博', '陈明远',
+    '优', '良', '优', '良', '优', '良', '', '', '', '', ''];
+  r = await reviewer.call('POST', '/api/excel/import?autoCreateCustomer=1', Buffer.from(toXml(header, [xmlLedgerRow])), true);
+  check('XML 格式导入台账', r.status === 200 && r.data.imported === 1, r.data);
+  r = await reviewer.call('GET', '/api/reports?keyword=导入XML测试客户');
+  check('XML 导入的记录已入台账', r.data.total === 1 && r.data.items[0].customerName === '导入XML测试客户股份有限公司', r.data);
+
   /* 员工批量导入：1 行有效，1 行工号重复，1 行机构不存在 */
   r = await reviewer.call('GET', '/api/excel/employee-template', undefined, true);
   check('审批人员无员工导入模板权限（403）', r.status === 403);
@@ -270,6 +298,12 @@ async function main() {
   const impEmp = r.data.items.find((e) => e.no === '904001');
   check('导入的员工已入主数据（含角色）', !!impEmp && (impEmp.roleKeys || []).includes('manager')
     && (impEmp.roleNames || '').includes('客户经理'), impEmp);
+
+  /* Excel「另存为 XML 表格 2003」格式导入员工 */
+  r = await admin.call('POST', '/api/excel/import-employees', Buffer.from(toXml(empHeader, [['904003', 'XML导入员工', '城东支行', '客户经理', '客户经理', '否']])), true);
+  check('XML 格式导入员工', r.status === 200 && r.data.imported === 1, r.data);
+  r = await admin.call('GET', '/api/employees');
+  check('XML 导入的员工已入主数据', !!r.data.items.find((e) => e.no === '904003'));
 
   /* 内置超级管理员 admin */
   const anonClient = client();

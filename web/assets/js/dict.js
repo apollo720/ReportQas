@@ -59,8 +59,14 @@
     return (v === null || v === undefined || v === '') ? '—' : Number(v).toLocaleString();
   }
 
+  /* 时间戳统一以 UTC ISO 存储（Z 后缀），展示时换算为浏览器本地时区 */
   function fmtDateTime(s) {
-    return s ? String(s).replace('T', ' ').slice(0, 16) : '—';
+    if (!s) return '—';
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return String(s).replace('T', ' ').slice(0, 16);
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+      + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
   global.LRDICT = {

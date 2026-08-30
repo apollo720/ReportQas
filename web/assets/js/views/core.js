@@ -324,7 +324,7 @@
       }
       async function doImport() {
         if (!importFile.value) {
-          global.LRUI.toast('warning', '请选择文件', '先选择要导入的 .xlsx 台账文件');
+          global.LRUI.toast('warning', '请选择文件', '先选择要导入的 .xlsx / XML 台账文件');
           return;
         }
         importing.value = true;
@@ -423,10 +423,10 @@
       '  <t-dialog v-model:visible="importVisible" header="导入评价台账（Excel）" :footer="false" :close-on-overlay-click="false">',
       '    <div class="notice notice--brand" style="margin-bottom:12px">',
       '      <t-icon name="info-circle-filled" class="notice__icon" />',
-      '      <span class="text-sm">列名须与原线下台账一致（经办机构 / 上报日期 / 客户名称 / 六项质量 / 退回原因 / 审查评价…）；机构、人员按名称匹配系统主数据。</span>',
+      '      <span class="text-sm">支持 .xlsx 或 Excel「另存为 → XML 表格 2003」格式；列名须与原线下台账一致（经办机构 / 上报日期 / 客户名称 / 六项质量 / 退回原因 / 审查评价…）；机构、人员按名称匹配系统主数据。</span>',
       '    </div>',
-      '    <div class="form-field"><label class="form-field__label">选择 .xlsx 文件</label>',
-      '      <input type="file" accept=".xlsx" @change="pickFile" /></div>',
+      '    <div class="form-field"><label class="form-field__label">选择 .xlsx / .xml 文件</label>',
+      '      <input type="file" accept=".xlsx,.xml" @change="pickFile" /></div>',
       '    <t-checkbox v-model="importAutoCreate">客户不存在时自动创建客户</t-checkbox>',
       '    <div class="row gap-4" style="margin-top:12px">',
       '      <t-button theme="primary" :loading="importing" @click="doImport"><template #icon><t-icon name="upload" /></template>开始导入</t-button>',

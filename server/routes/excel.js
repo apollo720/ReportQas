@@ -6,7 +6,7 @@
 
 const express = require('express');
 const XLSX = require('xlsx');
-const { all, get, run, now, nextId, nextPlainId } = require('../db');
+const { all, get, run, now, nextId, nextPlainId, nextDailyId } = require('../db');
 const { requireAuth, requirePerm, hashPassword } = require('../auth');
 const { GRADE_MAP, reportScore } = require('../constants');
 const { serialize, logAction, invalidateDicts } = require('../report-util');
@@ -161,9 +161,10 @@ router.get('/excel/template', requirePerm('excel:import'), (req, res) => {
 router.post('/excel/import', express.raw({ type: () => true, limit: '20mb' }), requirePerm('excel:import'), (req, res) => {
   let wb;
   try {
+    /* SheetJS 自动识别 xlsx 与 Excel「另存为 XML 表格 2003」（SpreadsheetML）两种格式 */
     wb = XLSX.read(req.body, { type: 'buffer', cellDates: true });
   } catch (e) {
-    return res.status(400).json({ error: '文件解析失败，请上传 .xlsx 格式的台账文件' });
+    return res.status(400).json({ error: '文件解析失败，请上传 .xlsx 或 Excel「另存为 XML 表格 2003」格式的台账文件' });
   }
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
@@ -234,9 +235,10 @@ router.post('/excel/import', express.raw({ type: () => true, limit: '20mb' }), r
     if (!custId) {
       if (!autoCreate) return fail(`客户「${custName}」不存在（未勾选自动创建）`);
       custId = nextPlainId('customers', 'C', 3);
-      run(`INSERT INTO customers (id, no, name, status, created_at)
-           VALUES (?, ?, ?, '新增', ?)`,
-        custId, 'KH' + Date.now().toString().slice(-8) + custId.slice(-2), custName, now());
+      const custNo = nextDailyId('customers', 'no', 'KH');
+      run(`INSERT INTO customers (id, no, name, created_at)
+           VALUES (?, ?, ?, ?)`,
+        custId, custNo, custName, now());
       custs.set(custName, custId);
     }
 
@@ -289,9 +291,10 @@ router.get('/excel/employee-template', requirePerm('employee:manage'), (req, res
 router.post('/excel/import-employees', express.raw({ type: () => true, limit: '20mb' }), requirePerm('employee:manage'), (req, res) => {
   let wb;
   try {
+    /* SheetJS 自动识别 xlsx 与 Excel「另存为 XML 表格 2003」（SpreadsheetML）两种格式 */
     wb = XLSX.read(req.body, { type: 'buffer', cellDates: true });
   } catch (e) {
-    return res.status(400).json({ error: '文件解析失败，请上传 .xlsx 格式的员工文件' });
+    return res.status(400).json({ error: '文件解析失败，请上传 .xlsx 或 Excel「另存为 XML 表格 2003」格式的员工文件' });
   }
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });

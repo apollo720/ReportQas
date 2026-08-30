@@ -291,7 +291,7 @@
       var impResult = Vue.ref(null);
       function pickImpFile(e) { impFile.value = e.target.files && e.target.files[0]; }
       async function doImport() {
-        if (!impFile.value) { global.LRUI.toast('warning', '请选择文件', '先选择要导入的 .xlsx 员工文件'); return; }
+        if (!impFile.value) { global.LRUI.toast('warning', '请选择文件', '先选择要导入的 .xlsx / XML 员工文件'); return; }
         importing.value = true;
         impResult.value = null;
         try {
@@ -393,10 +393,10 @@
       '  <t-dialog v-model:visible="impVisible" header="批量导入员工（Excel）" :footer="false" :close-on-overlay-click="false">',
       '    <div class="notice notice--brand" style="margin-bottom:12px">',
       '      <t-icon name="info-circle-filled" class="notice__icon" />',
-      '      <span class="text-sm">列名：工号 / 姓名 / 所属机构 / 岗位 / 角色 / 登录权限；机构按名称匹配系统主数据，工号重复的行跳过；初始密码统一为 123456。</span>',
+      '      <span class="text-sm">支持 .xlsx 或 Excel「另存为 → XML 表格 2003」格式；列名：工号 / 姓名 / 所属机构 / 岗位 / 角色 / 登录权限；机构按名称匹配系统主数据，工号重复的行跳过；初始密码统一为 123456。</span>',
       '    </div>',
-      '    <div class="form-field"><label class="form-field__label">选择 .xlsx 文件</label>',
-      '      <input type="file" accept=".xlsx" @change="pickImpFile" /></div>',
+      '    <div class="form-field"><label class="form-field__label">选择 .xlsx / .xml 文件</label>',
+      '      <input type="file" accept=".xlsx,.xml" @change="pickImpFile" /></div>',
       '    <div class="row gap-4" style="margin-top:12px">',
       '      <t-button theme="primary" :loading="importing" @click="doImport"><template #icon><t-icon name="upload" /></template>开始导入</t-button>',
       '      <t-button variant="outline" @click="downloadTemplate"><template #icon><t-icon name="download" /></template>下载导入模板</t-button>',

@@ -21,7 +21,7 @@ router.get('/meta', requireAuth, (req, res) => {
     workflow: WORKFLOW,
     orgs: all('SELECT id, code, name, status FROM orgs ORDER BY code'),
     employees: all(`SELECT id, no, name, org_id AS orgId, post, status FROM employees ORDER BY no`),
-    customers: all(`SELECT id, no, name, status FROM customers ORDER BY no`)
+    customers: all(`SELECT id, no, name FROM customers ORDER BY no`)
   });
 });
 

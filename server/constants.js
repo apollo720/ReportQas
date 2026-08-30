@@ -70,7 +70,8 @@ const PERM_CATALOG = [
   ]},
   { group: '客户', items: [
     { key: 'customer:read', label: '客户查看' },
-    { key: 'customer:manage', label: '客户新增/编辑' }
+    { key: 'customer:manage', label: '客户新增/编辑' },
+    { key: 'customer:delete', label: '客户删除' }
   ]},
   { group: '统计与Excel', items: [
     { key: 'stats:read', label: '统计查看（全部）' },

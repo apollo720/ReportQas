@@ -336,7 +336,7 @@
       '    </div>',
       '    <div v-if="customer && customer.industry" class="notice notice--brand mt-6">',
       '      <t-icon name="creditcard" class="notice__icon" />',
-      '      <span>客户档案：{{ customer.industry }} · {{ customer.scale }}（{{ customer.status }}客户）</span>',
+      '      <span>客户档案：{{ customer.industry }} · {{ customer.scale }}</span>',
       '    </div>',
       '  </app-card>',
       '',

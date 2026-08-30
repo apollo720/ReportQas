@@ -5,7 +5,7 @@
 'use strict';
 
 const express = require('express');
-const { all, get, run, now, nextPlainId } = require('../db');
+const { all, get, run, now, nextPlainId, nextDailyId } = require('../db');
 const { hashPassword, requireAuth, requirePerm } = require('../auth');
 const { ROLE_PRESETS } = require('../constants');
 const { invalidateDicts } = require('../report-util');
@@ -213,33 +213,45 @@ router.get('/customers', requireAuth, (req, res) => {
 });
 
 router.post('/customers', requirePerm('customer:manage'), (req, res) => {
-  const { name, industry, scale, status } = req.body || {};
+  const { name, industry, scale } = req.body || {};
   if (!trim(name)) return res.status(400).json({ error: '客户名称必填' });
   if (get('SELECT id FROM customers WHERE name = ?', trim(name))) {
     return res.status(400).json({ error: '客户名称已存在' });
   }
   const id = nextPlainId('customers', 'C', 3);
-  run(`INSERT INTO customers (id, no, name, industry, scale, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    id, 'KH' + Date.now().toString().slice(-8), trim(name),
-    trim(industry) || null, trim(scale) || null, trim(status) || '存量', now());
+  const no = nextDailyId('customers', 'no', 'KH');
+  run(`INSERT INTO customers (id, no, name, industry, scale, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    id, no, trim(name),
+    trim(industry) || null, trim(scale) || null, now());
   invalidateDicts();
   res.json({ id });
+});
+
+router.delete('/customers/:id', requirePerm('customer:delete'), (req, res) => {
+  const cust = get('SELECT * FROM customers WHERE id = ?', req.params.id);
+  if (!cust) return res.status(404).json({ error: '客户不存在' });
+  const reportCount = get('SELECT COUNT(*) AS n FROM reports WHERE customer_id = ?', cust.id).n;
+  if (reportCount > 0) {
+    return res.status(400).json({ error: `该客户关联 ${reportCount} 笔评价台账，不可删除` });
+  }
+  run('DELETE FROM customers WHERE id = ?', cust.id);
+  invalidateDicts();
+  res.json({ ok: true });
 });
 
 router.put('/customers/:id', requirePerm('customer:manage'), (req, res) => {
   const cust = get('SELECT * FROM customers WHERE id = ?', req.params.id);
   if (!cust) return res.status(404).json({ error: '客户不存在' });
-  const { name, industry, scale, status } = req.body || {};
+  const { name, industry, scale } = req.body || {};
   if (trim(name) && trim(name) !== cust.name &&
       get('SELECT id FROM customers WHERE name = ? AND id <> ?', trim(name), cust.id)) {
     return res.status(400).json({ error: '客户名称已存在' });
   }
-  run('UPDATE customers SET name = ?, industry = ?, scale = ?, status = ? WHERE id = ?',
+  run('UPDATE customers SET name = ?, industry = ?, scale = ? WHERE id = ?',
     trim(name) || cust.name,
     industry === undefined ? cust.industry : trim(industry) || null,
     scale === undefined ? cust.scale : trim(scale) || null,
-    status === undefined ? cust.status : trim(status) || '存量',
     cust.id);
   invalidateDicts();
   res.json({ ok: true });

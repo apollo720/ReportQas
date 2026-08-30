@@ -109,7 +109,8 @@
     customers: {
       list: function (keyword) { return call('GET', '/api/customers' + buildQuery({ keyword: keyword })); },
       create: function (payload) { return call('POST', '/api/customers', payload); },
-      update: function (id, payload) { return call('PUT', '/api/customers/' + encodeURIComponent(id), payload); }
+      update: function (id, payload) { return call('PUT', '/api/customers/' + encodeURIComponent(id), payload); },
+      remove: function (id) { return call('DELETE', '/api/customers/' + encodeURIComponent(id)); }
     },
 
     /* ---- 工作流 ---- */

@@ -61,7 +61,6 @@ CREATE TABLE IF NOT EXISTS customers (
   name          TEXT NOT NULL,
   industry      TEXT,
   scale         TEXT,
-  status        TEXT DEFAULT '存量',
   created_at    TEXT
 );
 
@@ -122,9 +121,9 @@ CREATE TABLE IF NOT EXISTS op_logs (
 
 db.exec(SCHEMA);
 
-/* 存量库迁移：废弃列启动时删除（客户表三列、机构表两列、员工表电话列） */
+/* 存量库迁移：废弃列启动时删除（客户表四列、机构表两列、员工表电话列） */
 for (const [table, cols] of [
-  ['customers', ['org_id', 'owner_id', 'credit_rating']],
+  ['customers', ['org_id', 'owner_id', 'credit_rating', 'status']],
   ['orgs', ['manager', 'staff']],
   ['employees', ['phone']]
 ]) {
@@ -172,4 +171,17 @@ function nextPlainId(table, prefix, pad = 3) {
   return prefix + String(seq).padStart(pad, '0');
 }
 
-module.exports = { db, all, get, run, now, nextId, nextPlainId, DB_PATH };
+/* 编号生成：前缀 + yyyymmdd + 当日 4 位流水（客户编号用，如 KH202608300001；日期取服务器本地时区） */
+function nextDailyId(table, col, prefix) {
+  const d = new Date();
+  const day = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const head = prefix + day;
+  const row = get(
+    `SELECT ${col} AS v FROM ${table} WHERE ${col} LIKE ? ORDER BY ${col} DESC LIMIT 1`,
+    head + '%'
+  );
+  const seq = row ? parseInt(row.v.slice(head.length), 10) + 1 : 1;
+  return head + String(seq).padStart(4, '0');
+}
+
+module.exports = { db, all, get, run, now, nextId, nextPlainId, nextDailyId, DB_PATH };

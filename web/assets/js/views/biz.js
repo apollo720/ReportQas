@@ -23,6 +23,7 @@
       var loading = Vue.ref(false);
 
       var canManage = Vue.computed(function () { return global.LRUI.hasPerm('customer:manage'); });
+      var canDelete = Vue.computed(function () { return global.LRUI.hasPerm('customer:delete'); });
 
       async function load() {
         loading.value = true;
@@ -49,26 +50,24 @@
         { colKey: 'industry', title: '所属行业', width: 220, ellipsis: true },
         { colKey: 'scale', title: '规模', width: 80, align: 'center' },
         { colKey: 'reportCount', title: '关联报告', width: 96, align: 'right' },
-        { colKey: 'status', title: '状态', width: 88, align: 'center' },
         { colKey: 'op', title: '操作', width: 150, align: 'center' }
       ];
 
       /* 新增 / 编辑对话框 */
       var dlgVisible = Vue.ref(false);
       var dlgMode = Vue.ref('create');
-      var form = Vue.reactive({ id: '', name: '', industry: '', scale: '小型', status: '存量' });
+      var form = Vue.reactive({ id: '', name: '', industry: '', scale: '小型' });
       var saving = Vue.ref(false);
 
       function openCreate() {
         dlgMode.value = 'create';
-        Object.assign(form, { id: '', name: '', industry: '', scale: '小型', status: '存量' });
+        Object.assign(form, { id: '', name: '', industry: '', scale: '小型' });
         dlgVisible.value = true;
       }
       function openEdit(row) {
         dlgMode.value = 'edit';
         Object.assign(form, {
-          id: row.id, name: row.name, industry: row.industry || '', scale: row.scale || '小型',
-          status: row.status || '存量'
+          id: row.id, name: row.name, industry: row.industry || '', scale: row.scale || '小型'
         });
         dlgVisible.value = true;
       }
@@ -78,12 +77,12 @@
         try {
           if (dlgMode.value === 'create') {
             await api.customers.create({
-              name: form.name, industry: form.industry, scale: form.scale, status: form.status
+              name: form.name, industry: form.industry, scale: form.scale
             });
             global.LRUI.toast('success', '已新增客户', form.name);
           } else {
             await api.customers.update(form.id, {
-              name: form.name, industry: form.industry, scale: form.scale, status: form.status
+              name: form.name, industry: form.industry, scale: form.scale
             });
             global.LRUI.toast('success', '已保存', form.name);
           }
@@ -98,11 +97,28 @@
         router.go('report-list', { id: row.name });
       }
 
+      function deleteCustomer(row) {
+        var dlg = global.TDesign.DialogPlugin.confirm({
+          header: '删除确认',
+          body: '确定删除客户「' + row.name + '」吗？该操作不可恢复；若已关联评价台账，将无法删除。',
+          confirmBtn: { theme: 'danger', content: '删除' },
+          cancelBtn: '取消',
+          onConfirm: async function () {
+            try {
+              await api.customers.remove(row.id);
+              global.LRUI.toast('success', '已删除', row.name);
+              load();
+            } catch (e) { global.LRUI.handle(e, '删除失败'); }
+            dlg.hide();
+          }
+        });
+      }
+
       return {
         filter: filter,
         pagination: pagination, pageData: pageData, filtered: filtered, columns: columns, loading: loading,
-        canManage: canManage, dlgVisible: dlgVisible, dlgMode: dlgMode, form: form, saving: saving,
-        openCreate: openCreate, openEdit: openEdit, save: save,
+        canManage: canManage, canDelete: canDelete, dlgVisible: dlgVisible, dlgMode: dlgMode, form: form, saving: saving,
+        openCreate: openCreate, openEdit: openEdit, save: save, deleteCustomer: deleteCustomer,
         reset: function () { filter.keyword = ''; },
         viewReports: viewReports
       };
@@ -130,13 +146,11 @@
       '      :pagination="pagination" @page-change="(p) => pagination.current = p.current">',
       '      <template #name="{ row }"><span class="cell-strong">{{ row.name }}</span></template>',
       '      <template #reportCount="{ row }"><span class="text-number">{{ row.reportCount }}</span></template>',
-      '      <template #status="{ row }">',
-      '        <t-tag :theme="row.status === \'新增\' ? \'primary\' : \'default\'" variant="light">{{ row.status }}</t-tag>',
-      '      </template>',
       '      <template #op="{ row }">',
       '        <t-space size="small">',
       '          <t-link theme="primary" hover="color" @click="viewReports(row)">评价记录</t-link>',
       '          <t-link v-if="canManage" theme="primary" hover="color" @click="openEdit(row)">编辑</t-link>',
+      '          <t-link v-if="canDelete" theme="danger" hover="color" @click="deleteCustomer(row)">删除</t-link>',
       '        </t-space>',
       '      </template>',
       '    </t-table>',
