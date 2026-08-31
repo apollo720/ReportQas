@@ -138,7 +138,7 @@
           list = [
             { icon: 'file-paste', theme: 'brand', label: '评价总笔数', value: s.count || 0, unit: '笔', extra: '统计区间内' },
             { icon: 'chart-bubble', theme: 'success', label: '平均得分', value: s.avgScore != null ? s.avgScore : '—', unit: '分', extra: '六维平均口径' },
-            { icon: 'star', theme: 'warning', label: '优良占比', value: s.goodRate != null ? s.goodRate : '—', unit: '%', extra: '得分 ≥ 90 占比' },
+            { icon: 'star', theme: 'warning', label: '优良占比', value: s.goodRate != null ? s.goodRate : '—', unit: '%', extra: '得分 ≥ 80 占比' },
             { icon: 'secured', theme: 'danger', label: '待审查', value: (s.byStatus && s.byStatus.pending_review) || 0, unit: '笔', extra: '待负责人审查评价' }
           ];
         }
@@ -291,9 +291,11 @@
         { colKey: 'orgName', title: '经办机构', width: 110 },
         { colKey: 'approved', title: '是否核额', width: 86, align: 'center' },
         { colKey: 'amount', title: '授信金额(万)', width: 118, align: 'right' },
+        { colKey: 'exposure_amount', title: '敞口金额(万)', width: 110, align: 'right' },
         { colKey: 'mainInvestigatorName', title: '主调查人', width: 96 },
         { colKey: 'reviewerName', title: '审批人员', width: 96 },
         { colKey: 'scores', title: '六维分析质量', width: 210 },
+        { colKey: 'score', title: '报告平均得分', width: 108, align: 'right' },
         { colKey: 'review', title: '审查评价', width: 88, align: 'center' },
         { colKey: 'status', title: '状态', width: 116 },
         { colKey: 'op', title: '操作', width: 130, fixed: 'right', align: 'center' }
@@ -395,6 +397,7 @@
       '        <t-tag v-else theme="default" variant="light-outline">未核额</t-tag>',
       '      </template>',
       '      <template #amount="{ row }"><span class="text-number">{{ fmtAmount(row.amount) }}</span></template>',
+      '      <template #exposure_amount="{ row }"><span class="text-number">{{ fmtAmount(row.exposure_amount) }}</span></template>',
       '      <template #scores="{ row }">',
       '        <div class="row gap-2">',
       '          <t-popup v-for="d in DIMENSIONS" :key="d.key" placement="top" :content="d.label + \'：\' + (row[\'score_\' + d.key] || \'未评\')">',
@@ -402,6 +405,7 @@
       '          </t-popup>',
       '        </div>',
       '      </template>',
+      '      <template #score="{ row }"><span class="text-number cell-strong">{{ row.score != null ? row.score : \'—\' }}</span></template>',
       '      <template #review="{ row }">',
       '        <grade-pill v-if="row.review" :grade="row.review" />',
       '        <span v-else class="cell-muted">待审查</span>',

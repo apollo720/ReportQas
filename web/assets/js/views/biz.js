@@ -217,7 +217,7 @@
         return [
           { icon: 'file-paste', theme: 'brand', label: '审查笔数', value: s.count != null ? s.count : '—', unit: '笔', extra: '统计区间内全部台账' },
           { icon: 'chart-bubble', theme: 'success', label: '平均得分', value: s.avgScore != null ? s.avgScore : '—', unit: '分', extra: '六维平均口径（报告得分）' },
-          { icon: 'star', theme: 'warning', label: '优良占比', value: s.goodRate != null ? s.goodRate : '—', unit: '%', extra: '得分 ≥ 90 分的笔数占比' },
+          { icon: 'star', theme: 'warning', label: '优良占比', value: s.goodRate != null ? s.goodRate : '—', unit: '%', extra: '得分 ≥ 80 分的笔数占比' },
           { icon: 'secured', theme: 'brand', label: '审查评价平均分', value: s.reviewAvg != null ? s.reviewAvg : '—', unit: '分', extra: '负责人对审批人员审查工作的评分' }
         ];
       });
@@ -358,7 +358,7 @@
       '  </div>',
       '',
       '  <div class="grid-2">',
-      '    <app-card title="报告得分等级分布" desc="按六维平均得分落档（优≥95 / 良≥85 / 中≥75 / 差<75）">',
+      '    <app-card title="报告得分等级分布" desc="按六维平均得分落档（优≥85 / 良≥75 / 中≥65 / 差<65）">',
       '      <div ref="pieEl" class="chart"></div>',
       '    </app-card>',
       '    <app-card title="六维短板分析" desc="六个分析质量维度的平均分，越低越需要培训">',
@@ -395,7 +395,7 @@
       '      </template>',
       '      <template #amount="{ row }"><span class="text-number">{{ row.amount.toLocaleString() }}</span></template>',
       '    </t-table>',
-      '    <template #foot><span class="text-sm">口径：报告得分 = 六维平均（考核客户经理）；审查评价 = 负责人对审批人员审查工作的评分，单列统计；优良占比 = 得分 ≥ 90 的笔数占比</span></template>',
+      '    <template #foot><span class="text-sm">口径：报告得分 = 六维平均（考核客户经理）；审查评价 = 负责人对审批人员审查工作的评分，单列统计；优良占比 = 得分 ≥ 80 的笔数占比</span></template>',
       '  </app-card>',
       '</div>'
     ].join('')

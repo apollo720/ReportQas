@@ -8,7 +8,9 @@
 'use strict';
 
 const express = require('express');
-const { all, get, run, now, nextId } = require('../db');
+const fs = require('fs');
+const path = require('path');
+const { all, get, run, now, nextId, DATA_DIR } = require('../db');
 const { requireAuth, requirePerm } = require('../auth');
 const { GRADE_MAP, reportScore } = require('../constants');
 const { serialize, validatePayload, logAction, selfScopeSql } = require('../report-util');
@@ -18,6 +20,75 @@ router.use(requireAuth);
 
 const can = (user, perm) => user.perms.includes(perm);
 const roleKeysOf = (u) => u.roles.map((r) => r.key);
+
+/* 记录可见性（与列表口径一致：report:read 全量；report:read:self 按角色） */
+function canViewRecord(u, row) {
+  if (can(u, 'report:read')) return true;
+  if (!can(u, 'report:read:self')) return false;
+  const ids = roleKeysOf(u);
+  return (ids.includes('manager') && row.main_investigator === u.id) ||
+         (ids.includes('reviewer') && row.reviewer === u.id);
+}
+
+/* ---------------- 附件（审批人员上传，多个） ---------------- */
+const UPLOAD_ROOT = path.join(DATA_DIR, 'uploads');
+const safeName = (name) => String(name || '附件')
+  .split(/[\\/]/).pop().replace(/[\x00-\x1f]/g, '').slice(0, 120) || '附件';
+
+router.get('/reports/:id/attachments', (req, res) => {
+  const report = get('SELECT * FROM reports WHERE id = ?', req.params.id);
+  if (!report) return res.status(404).json({ error: '记录不存在' });
+  if (!canViewRecord(req.user, report)) return res.status(403).json({ error: '没有查看该记录的权限' });
+  const items = all(
+    `SELECT a.id, a.filename, a.size, a.uploaded_by, a.created_at, e.name AS uploaderName
+     FROM attachments a LEFT JOIN employees e ON e.id = a.uploaded_by
+     WHERE a.report_id = ? ORDER BY a.id`, report.id);
+  res.json({ items });
+});
+
+router.post('/reports/:id/attachments', express.raw({ type: () => true, limit: '50mb' }), requirePerm('report:score'), (req, res) => {
+  const report = get('SELECT * FROM reports WHERE id = ?', req.params.id);
+  if (!report) return res.status(404).json({ error: '记录不存在' });
+  if (!req.body || !req.body.length) return res.status(400).json({ error: '附件内容为空' });
+  const filename = safeName(req.query.name || '');
+  const ins = run('INSERT INTO attachments (report_id, filename, size, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?)',
+    report.id, filename, req.body.length, req.user.id, now());
+  const attId = Number(ins.lastInsertRowid);
+  const dir = path.join(UPLOAD_ROOT, report.id);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, String(attId)), req.body);
+  logAction(report.id, req.user, 'upload', `上传附件「${filename}」`);
+  res.json({ id: attId, filename, size: req.body.length });
+});
+
+router.get('/reports/:id/attachments/:attId', (req, res) => {
+  const report = get('SELECT * FROM reports WHERE id = ?', req.params.id);
+  if (!report) return res.status(404).json({ error: '记录不存在' });
+  if (!canViewRecord(req.user, report)) return res.status(403).json({ error: '没有查看该记录的权限' });
+  const att = get('SELECT * FROM attachments WHERE id = ? AND report_id = ?', req.params.attId, report.id);
+  if (!att) return res.status(404).json({ error: '附件不存在' });
+  const file = path.join(UPLOAD_ROOT, report.id, String(att.id));
+  if (!fs.existsSync(file)) return res.status(404).json({ error: '附件文件已丢失' });
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition',
+    `attachment; filename="file"; filename*=UTF-8''${encodeURIComponent(att.filename)}`);
+  fs.createReadStream(file).pipe(res);
+});
+
+router.delete('/reports/:id/attachments/:attId', (req, res) => {
+  const report = get('SELECT * FROM reports WHERE id = ?', req.params.id);
+  if (!report) return res.status(404).json({ error: '记录不存在' });
+  const att = get('SELECT * FROM attachments WHERE id = ? AND report_id = ?', req.params.attId, report.id);
+  if (!att) return res.status(404).json({ error: '附件不存在' });
+  if (att.uploaded_by !== req.user.id && !can(req.user, 'report:delete')) {
+    return res.status(403).json({ error: '只能删除本人上传的附件' });
+  }
+  run('DELETE FROM attachments WHERE id = ?', att.id);
+  const file = path.join(UPLOAD_ROOT, report.id, String(att.id));
+  if (fs.existsSync(file)) fs.unlinkSync(file);
+  logAction(report.id, req.user, 'delete-attachment', `删除附件「${att.filename}」`);
+  res.json({ ok: true });
+});
 
 /* ---------------- 列表 ---------------- */
 router.get('/reports', requireAuth, (req, res) => {
@@ -91,7 +162,7 @@ router.post('/reports', requirePerm('report:create'), (req, res) => {
   }
   const id = nextId('reports', 'BG');
   const ts = now();
-  const cols = ['org_id', 'report_date', 'customer_id', 'approved', 'amount',
+  const cols = ['org_id', 'report_date', 'customer_id', 'approved', 'amount', 'exposure_amount',
     'main_investigator', 'assistant_investigator', 'first_responsible',
     'score_sys', 'score_credit', 'score_asset', 'score_operate', 'score_purpose', 'score_guarantee',
     'return1', 'return2', 'return3', 'return4'];

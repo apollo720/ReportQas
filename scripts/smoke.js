@@ -137,8 +137,24 @@ async function main() {
 
   r = await reviewer.call('GET', `/api/reports/${newId}`);
   check('归档后报告得分=六维平均，审查评价单列',
-    r.data.item.score === 93.3 && r.data.item.reviewScore === 90,
+    r.data.item.score === 83.3 && r.data.item.reviewScore === 80,
     { score: r.data.item.score, reviewScore: r.data.item.reviewScore });
+
+  /* 附件：审批人员多附件上传 / 下载 / 删除；无权限上传被拒 */
+  r = await reviewer.call('POST', `/api/reports/${newId}/attachments?name=${encodeURIComponent('审查附件一.txt')}`, Buffer.from('附件内容A'), true);
+  check('上传附件一', r.status === 200 && r.data.filename === '审查附件一.txt', r.data);
+  r = await reviewer.call('POST', `/api/reports/${newId}/attachments?name=${encodeURIComponent('审查附件二.txt')}`, Buffer.from('附件内容BB'), true);
+  check('上传附件二', r.status === 200, r.data);
+  r = await chief.call('POST', `/api/reports/${newId}/attachments?name=x.txt`, Buffer.from('x'), true);
+  check('无 report:score 权限上传被拒（403）', r.status === 403, r.data);
+  r = await reviewer.call('GET', `/api/reports/${newId}/attachments`);
+  check('附件列表返回 2 条', r.data.items.length === 2, r.data.items);
+  r = await reviewer.call('GET', `/api/reports/${newId}/attachments/${r.data.items[0].id}`, undefined, true);
+  check('附件下载内容一致', r.status === 200 && Buffer.from(r.data).toString() === '附件内容A');
+  r = await reviewer.call('DELETE', `/api/reports/${newId}/attachments/${(await reviewer.call('GET', `/api/reports/${newId}/attachments`)).data.items[1].id}`);
+  check('删除附件', r.status === 200, r.data);
+  r = await reviewer.call('GET', `/api/reports/${newId}/attachments`);
+  check('删除后附件剩 1 条', r.data.items.length === 1, r.data.items);
 
   console.log('\n== 4. 待办 / 已办 ==');
   r = await reviewer.call('GET', '/api/tasks?box=todo');

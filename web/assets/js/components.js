@@ -40,7 +40,8 @@
     name: 'GradePicker',
     props: {
       modelValue: { type: String, default: '' },
-      disabled: { type: Boolean, default: false }
+      disabled: { type: Boolean, default: false },
+      scoreMap: { type: Object, default: null } /* 覆盖各等级显示分值（如审查评价） */
     },
     emits: ['update:modelValue', 'change'],
     setup: function (props, ctx) {
@@ -49,7 +50,10 @@
         ctx.emit('update:modelValue', g.key);
         ctx.emit('change', g.key);
       }
-      return { grades: D.GRADES, pick: pick };
+      function scoreOf(g) {
+        return (props.scoreMap && props.scoreMap[g.key] != null) ? props.scoreMap[g.key] : g.score;
+      }
+      return { grades: D.GRADES, pick: pick, scoreOf: scoreOf };
     },
     template: [
       '<div class="grade-picker">',
@@ -59,7 +63,7 @@
       '    :disabled="disabled"',
       '    @click="pick(g)">',
       '    <span>{{ g.key }}</span>',
-      '    <span class="grade-picker__score">{{ g.score }}</span>',
+      '    <span class="grade-picker__score">{{ scoreOf(g) }}</span>',
       '  </button>',
       '</div>'
     ].join('')

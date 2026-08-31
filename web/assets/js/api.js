@@ -69,7 +69,18 @@
       sendBack: function (id, note) {
         return call('POST', '/api/reports/' + encodeURIComponent(id) + '/return', { note: note });
       },
-      remove: function (id) { return call('DELETE', '/api/reports/' + encodeURIComponent(id)); }
+      remove: function (id) { return call('DELETE', '/api/reports/' + encodeURIComponent(id)); },
+      attachments: function (id) { return call('GET', '/api/reports/' + encodeURIComponent(id) + '/attachments'); },
+      uploadAttachment: async function (id, file) {
+        var buf = await file.arrayBuffer();
+        return call('POST', '/api/reports/' + encodeURIComponent(id) + '/attachments' + buildQuery({ name: file.name }), buf, true);
+      },
+      removeAttachment: function (id, attId) {
+        return call('DELETE', '/api/reports/' + encodeURIComponent(id) + '/attachments/' + attId);
+      },
+      attachmentUrl: function (id, attId) {
+        return '/api/reports/' + encodeURIComponent(id) + '/attachments/' + attId;
+      }
     },
 
     /* ---- 待办 / 已办 ---- */

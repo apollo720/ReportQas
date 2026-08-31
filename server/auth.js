@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const { all, get, run, now } = require('./db');
 const { MENUS } = require('./constants');
 
-const SESSION_DAYS = 7;
+const SESSION_MS = 60 * 60 * 1000; /* 会话有效期 1 小时 */
 const COOKIE_NAME = 'lrsid';
 
 /* ---------- 密码 ---------- */
@@ -28,11 +28,11 @@ function verifyPassword(password, salt, expected) {
 /* ---------- 会话 ---------- */
 function createSession(res, employeeId) {
   const token = crypto.randomBytes(24).toString('hex');
-  const expires = new Date(Date.now() + SESSION_DAYS * 86400e3);
+  const expires = new Date(Date.now() + SESSION_MS);
   run('INSERT INTO sessions (token, employee_id, created_at, expires_at) VALUES (?, ?, ?, ?)',
     token, employeeId, now(), expires.toISOString());
   res.setHeader('Set-Cookie',
-    `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}`);
+    `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MS / 1000}`);
 }
 
 function destroySession(req, res) {
@@ -54,7 +54,10 @@ function readCookie(req, name) {
 function resolveUser(req) {
   const token = readCookie(req, COOKIE_NAME);
   if (!token) return null;
-  const sess = get('SELECT * FROM sessions WHERE token = ? AND expires_at >= ?', token, now());
+  /* created_at 下限同时拦截旧版本签发的长有效期会话 */
+  const createdAfter = new Date(Date.now() - SESSION_MS).toISOString();
+  const sess = get('SELECT * FROM sessions WHERE token = ? AND expires_at >= ? AND created_at >= ?',
+    token, now(), createdAfter);
   if (!sess) return null;
   const emp = get('SELECT * FROM employees WHERE id = ?', sess.employee_id);
   if (!emp || emp.status !== '在职' || !emp.can_login) return null;

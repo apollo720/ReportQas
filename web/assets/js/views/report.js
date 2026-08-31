@@ -15,7 +15,7 @@
 
   function blankRecord() {
     return {
-      id: '', org_id: '', report_date: '', customer_id: '', approved: '否', amount: 0,
+      id: '', org_id: '', report_date: '', customer_id: '', approved: '否', amount: 0, exposure_amount: 0,
       main_investigator: '', assistant_investigator: '', first_responsible: '', reviewer: '',
       score_sys: '', score_credit: '', score_asset: '', score_operate: '',
       score_purpose: '', score_guarantee: '',
@@ -87,7 +87,7 @@
         return {
           orgId: record.value.org_id, reportDate: record.value.report_date,
           customerId: record.value.customer_id, approved: record.value.approved,
-          amount: record.value.amount,
+          amount: record.value.amount, exposureAmount: record.value.exposure_amount,
           mainInvestigator: record.value.main_investigator,
           assistantInvestigator: record.value.assistant_investigator,
           firstResponsible: record.value.first_responsible,
@@ -115,11 +115,13 @@
             record.value.reviewerName = me.value.name;
             customer.value = {};
             timeline.value = [];
+            attachments.value = [];
           } else {
             var data = await api.reports.get(router.route.params.id);
             record.value = data.item;
             customer.value = data.customer || {};
             timeline.value = data.timeline || [];
+            attachments.value = (await api.reports.attachments(router.route.params.id)).items;
           }
         } catch (e) {
           global.LRUI.handle(e, '加载失败');
@@ -216,6 +218,50 @@
       }
 
       function goBack() { router.go('report-list'); }
+
+      /* 附件（审批人员上传，多个） */
+      var attachments = Vue.ref([]);
+      var attUploading = Vue.ref(false);
+      function fmtSize(n) {
+        if (!n && n !== 0) return '—';
+        return n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB'
+          : n >= 1024 ? (n / 1024).toFixed(1) + ' KB' : n + ' B';
+      }
+      async function uploadAttachments(e) {
+        var files = e.target.files;
+        if (!files || !files.length) return;
+        attUploading.value = true;
+        var ok = 0, fail = 0;
+        try {
+          for (var i = 0; i < files.length; i++) {
+            try { await api.reports.uploadAttachment(record.value.id, files[i]); ok += 1; }
+            catch (err) { fail += 1; }
+          }
+          if (fail) global.LRUI.toast('warning', '部分附件上传失败', ok + ' 个成功，' + fail + ' 个失败');
+          else global.LRUI.toast('success', '附件已上传', '共 ' + ok + ' 个文件');
+          attachments.value = (await api.reports.attachments(record.value.id)).items;
+        } catch (e2) { global.LRUI.handle(e2, '上传失败'); }
+        e.target.value = '';
+        attUploading.value = false;
+      }
+      function downloadAttachment(a) { global.window.open(api.reports.attachmentUrl(record.value.id, a.id)); }
+      function deleteAttachment(a) {
+        var dlg = global.TDesign.DialogPlugin.confirm({
+          header: '删除确认',
+          body: '确定删除附件「' + a.filename + '」吗？该操作不可恢复。',
+          confirmBtn: { theme: 'danger', content: '删除' },
+          cancelBtn: '取消',
+          onConfirm: async function () {
+            try {
+              await api.reports.removeAttachment(record.value.id, a.id);
+              attachments.value = (await api.reports.attachments(record.value.id)).items;
+            } catch (e) { global.LRUI.handle(e, '删除失败'); }
+            dlg.hide();
+          }
+        });
+      }
+      function canDeleteAttachment(a) { return a.uploaded_by === me.value.id || global.LRUI.hasPerm('report:delete'); }
+
       function confirmDelete() {
         var dlg = global.TDesign.DialogPlugin.confirm({
           header: '删除确认',
@@ -244,6 +290,11 @@
         reviewForm: reviewForm, doReview: doReview,
         returnVisible: returnVisible, returnNote: returnNote, openReturn: openReturn, doReturn: doReturn,
         goBack: goBack, confirmDelete: confirmDelete, refreshMeta: refreshMeta,
+        attachments: attachments, attUploading: attUploading,
+        uploadAttachments: uploadAttachments, downloadAttachment: downloadAttachment,
+        deleteAttachment: deleteAttachment, fmtSize: fmtSize, canDeleteAttachment: canDeleteAttachment,
+        canScorePerm: canScorePerm,
+        REVIEW_SCORES: D.REVIEW_SCORES,
         GRADE_MAP: D.GRADE_MAP, scoreToGrade: D.scoreToGrade, fmtAmount: D.fmtAmount, fmtDateTime: D.fmtDateTime
       };
     },
@@ -315,6 +366,11 @@
       '        <div v-else class="form-field__value text-number">{{ fmtAmount(record.amount) }}</div>',
       '      </div>',
       '      <div class="form-field">',
+      '        <label class="form-field__label">敞口金额（万元）</label>',
+      '        <t-input-number v-if="canEvaluate" v-model="record.exposure_amount" :min="0" :step="10" size="small" style="width:100%" />',
+      '        <div v-else class="form-field__value text-number">{{ fmtAmount(record.exposure_amount) }}</div>',
+      '      </div>',
+      '      <div class="form-field">',
       '        <label class="form-field__label">审批人</label>',
       '        <div class="form-field__value">{{ record.reviewerName || \'—\' }}</div>',
       '      </div>',
@@ -364,7 +420,7 @@
       '        <div style="text-align:right">',
       '          <div class="text-secondary text-sm">审查评价（负责人单列打分）</div>',
       '          <div class="row gap-4" style="align-items:baseline;justify-content:flex-end">',
-      '            <span style="font-size:28px;font-weight:600;line-height:36px" class="text-number">{{ record.review ? GRADE_MAP[record.review].score : \'—\' }}</span>',
+      '            <span style="font-size:28px;font-weight:600;line-height:36px" class="text-number">{{ record.review ? REVIEW_SCORES[record.review] : \'—\' }}</span>',
       '            <grade-pill v-if="record.review" :grade="record.review" />',
       '          </div>',
       '        </div>',
@@ -402,11 +458,33 @@
       '    </div>',
       '  </app-card>',
       '',
+      '  <app-card v-if="!isNew" title="附件">',
+      '    <div class="row gap-4" style="margin-bottom:12px" v-if="canScorePerm">',
+      '      <label class="t-button t-button--variant-outline t-button--theme-default" style="cursor:pointer;position:relative;overflow:hidden"',
+      '        :class="attUploading ? \'t-is-loading\' : \'\'">',
+      '        <input type="file" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer" @change="uploadAttachments" />',
+      '        {{ attUploading ? \'上传中…\' : \'上传附件（可多选）\' }}',
+      '      </label>',
+      '      <span class="text-sm text-placeholder">由审批人员上传，支持多选；单个文件不超过 50MB。</span>',
+      '    </div>',
+      '    <div v-if="!attachments.length" class="form-field__value form-field__value--muted">暂无附件</div>',
+      '    <div v-else>',
+      '      <div v-for="a in attachments" :key="a.id" class="row row--between" style="padding:8px 0;border-bottom:1px solid var(--td-border-level-1-color)">',
+      '        <div class="row gap-4" style="min-width:0">',
+      '          <t-icon name="attach" />',
+      '          <t-link theme="primary" hover="color" @click="downloadAttachment(a)">{{ a.filename }}</t-link>',
+      '          <span class="text-sm text-placeholder">{{ fmtSize(a.size) }} · {{ a.uploaderName || \'—\' }} · {{ fmtDateTime(a.created_at) }}</span>',
+      '        </div>',
+      '        <t-link v-if="canDeleteAttachment(a)" theme="danger" hover="color" @click="deleteAttachment(a)">删除</t-link>',
+      '      </div>',
+      '    </div>',
+      '  </app-card>',
+      '',
       '  <app-card title="审查评价" :desc="canReview ? \'评价对象：审批人（\' + (record.reviewerName || \'—\') + \'）的审查工作 —— 请对其评分的客观性、退回登记的规范性进行评价\' : \'由审批负责人对审批人员的审查工作进行评价打分并填写意见\'">',
       '    <div class="row row--between" style="align-items:flex-start;gap:24px;flex-wrap:wrap">',
       '      <div>',
-      '        <label class="form-field__label">审查评价等级（优100 / 良90 / 中80 / 差70）</label>',
-      '        <grade-picker v-model="reviewForm.grade" :disabled="!canReview" />',
+      '        <label class="form-field__label">审查评价等级（优90 / 良80 / 中70 / 差50）</label>',
+      '        <grade-picker v-model="reviewForm.grade" :score-map="REVIEW_SCORES" :disabled="!canReview" />',
       '      </div>',
       '      <div style="text-align:right">',
       '        <div class="text-secondary text-sm">审查人</div>',

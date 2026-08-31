@@ -4,14 +4,17 @@
  */
 'use strict';
 
-/* 质量四档：优 100 / 良 90 / 中 80 / 差 70 */
+/* 质量四档：优 90 / 良 80 / 中 70 / 差 50（六维质量与审查评价同分值） */
 const GRADES = [
-  { key: '优', score: 100, theme: 'brand' },
-  { key: '良', score: 90, theme: 'success' },
-  { key: '中', score: 80, theme: 'warning' },
-  { key: '差', score: 70, theme: 'danger' }
+  { key: '优', score: 90, theme: 'brand' },
+  { key: '良', score: 80, theme: 'success' },
+  { key: '中', score: 70, theme: 'warning' },
+  { key: '差', score: 50, theme: 'danger' }
 ];
 const GRADE_MAP = Object.fromEntries(GRADES.map((g) => [g.key, g]));
+
+/* 审查评价分值（考核审批人员的审查工作，与六维质量分值不同） */
+const REVIEW_SCORES = { '优': 90, '良': 80, '中': 70, '差': 50 };
 
 /* 六项分析质量维度（对应台账要素，考核客户经理的调查报告） */
 const DIMENSIONS = [
@@ -31,9 +34,9 @@ const STATUS_MAP = {
   archived: { label: '已归档', theme: 'success' }
 };
 
-/* 报告得分 = 六维平均；优良 = 得分 ≥ 90（考核客户经理报告质量）
+/* 报告得分 = 六维平均（满分 90）；优良 = 得分 ≥ 80（平均每维良以上，考核客户经理报告质量）
    审查评价单列（考核审批人员的审查工作质量） */
-const GOOD_SCORE_LINE = 90;
+const GOOD_SCORE_LINE = 80;
 
 function reportScore(rec) {
   const cols = ['sys', 'credit', 'asset', 'operate', 'purpose', 'guarantee'];
@@ -153,6 +156,6 @@ const WORKFLOW = {
 };
 
 module.exports = {
-  GRADES, GRADE_MAP, DIMENSIONS, STATUS_MAP, GOOD_SCORE_LINE, reportScore,
+  GRADES, GRADE_MAP, REVIEW_SCORES, DIMENSIONS, STATUS_MAP, GOOD_SCORE_LINE, reportScore,
   PERM_CATALOG, MENUS, ROLE_PRESETS, WORKFLOW
 };

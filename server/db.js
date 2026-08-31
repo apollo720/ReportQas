@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS reports (
   customer_id            TEXT NOT NULL,
   approved               TEXT DEFAULT '否',
   amount                 REAL DEFAULT 0,
+  exposure_amount        REAL DEFAULT 0,
   main_investigator      TEXT,
   assistant_investigator TEXT,
   first_responsible      TEXT,
@@ -101,6 +102,15 @@ CREATE TABLE IF NOT EXISTS reports (
 CREATE INDEX IF NOT EXISTS idx_reports_date ON reports(report_date);
 CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
 
+CREATE TABLE IF NOT EXISTS attachments (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_id     TEXT NOT NULL,
+  filename      TEXT NOT NULL,
+  size          INTEGER DEFAULT 0,
+  uploaded_by   TEXT,
+  created_at    TEXT
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   token       TEXT PRIMARY KEY,
   employee_id TEXT NOT NULL,
@@ -121,7 +131,7 @@ CREATE TABLE IF NOT EXISTS op_logs (
 
 db.exec(SCHEMA);
 
-/* 存量库迁移：废弃列启动时删除（客户表四列、机构表两列、员工表电话列） */
+/* 存量库迁移：废弃列启动时删除（客户表四列、机构表两列、员工表电话列），新列自动补齐 */
 for (const [table, cols] of [
   ['customers', ['org_id', 'owner_id', 'credit_rating', 'status']],
   ['orgs', ['manager', 'staff']],
@@ -132,9 +142,14 @@ for (const [table, cols] of [
     if (existing.has(col)) db.exec(`ALTER TABLE ${table} DROP COLUMN ${col}`);
   }
 }
+{
+  const reportCols = new Set(db.prepare('PRAGMA table_info(reports)').all().map((c) => c.name));
+  if (!reportCols.has('exposure_amount')) db.exec('ALTER TABLE reports ADD COLUMN exposure_amount REAL DEFAULT 0');
+}
 
 /* 清理过期会话（启动时执行一次即可，量小） */
 db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(new Date().toISOString());
+db.prepare('DELETE FROM sessions WHERE created_at < ?').run(new Date(Date.now() - 60 * 60 * 1000).toISOString());
 
 const now = () => new Date().toISOString();
 
@@ -184,4 +199,4 @@ function nextDailyId(table, col, prefix) {
   return head + String(seq).padStart(4, '0');
 }
 
-module.exports = { db, all, get, run, now, nextId, nextPlainId, nextDailyId, DB_PATH };
+module.exports = { db, all, get, run, now, nextId, nextPlainId, nextDailyId, DB_PATH, DATA_DIR };

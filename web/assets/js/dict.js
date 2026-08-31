@@ -6,10 +6,10 @@
   'use strict';
 
   var GRADES = [
-    { key: '优', score: 100, theme: 'brand' },
-    { key: '良', score: 90, theme: 'success' },
-    { key: '中', score: 80, theme: 'warning' },
-    { key: '差', score: 70, theme: 'danger' }
+    { key: '优', score: 90, theme: 'brand' },
+    { key: '良', score: 80, theme: 'success' },
+    { key: '中', score: 70, theme: 'warning' },
+    { key: '差', score: 50, theme: 'danger' }
   ];
 
   var GRADE_MAP = GRADES.reduce(function (acc, g) { acc[g.key] = g; return acc; }, {});
@@ -30,7 +30,7 @@
     archived: { label: '已归档', theme: 'success' }
   };
 
-  /* 报告得分 = 六维平均（优100/良90/中80/差70）；审查评价单列，不并入
+  /* 报告得分 = 六维平均（优90/良80/中70/差50）；审查评价单列，不并入
      入参兼容两种形态：{sys,credit,...} 或台账记录 {score_sys,...} */
   function calcReportScore(obj) {
     if (!obj) return null;
@@ -45,9 +45,9 @@
 
   function scoreToGrade(score) {
     if (score === null || score === undefined) return '';
-    if (score >= 95) return '优';
-    if (score >= 85) return '良';
-    if (score >= 75) return '中';
+    if (score >= 85) return '优';
+    if (score >= 75) return '良';
+    if (score >= 65) return '中';
     return '差';
   }
 
@@ -72,6 +72,7 @@
   global.LRDICT = {
     GRADES: GRADES,
     GRADE_MAP: GRADE_MAP,
+    REVIEW_SCORES: { '优': 90, '良': 80, '中': 70, '差': 50 },
     DIMENSIONS: DIMENSIONS,
     STATUS_MAP: STATUS_MAP,
     GOOD_LINE: 90,

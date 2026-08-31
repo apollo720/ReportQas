@@ -4,7 +4,7 @@
 'use strict';
 
 const { all, get, run, now } = require('./db');
-const { GRADE_MAP, DIMENSIONS, reportScore, GOOD_SCORE_LINE } = require('./constants');
+const { GRADE_MAP, DIMENSIONS, reportScore, GOOD_SCORE_LINE, REVIEW_SCORES } = require('./constants');
 
 /* 缓存主数据名映射，主数据变更或导入后调用 invalidateDicts() 立即失效 */
 let cache = { at: 0, orgs: null, emps: null, custs: null };
@@ -53,16 +53,16 @@ function serialize(row) {
   r.score = reportScore(row);
   r.scoreGrade = gradeOf(r.score);
   r.good = r.score !== null && r.score >= GOOD_SCORE_LINE;
-  r.reviewScore = row.review ? GRADE_MAP[row.review].score : null;
+  r.reviewScore = row.review ? (REVIEW_SCORES[row.review] ?? null) : null;
   r.returnCount = [row.return1, row.return2, row.return3, row.return4].filter(Boolean).length;
   return r;
 }
 
 function gradeOf(score) {
   if (score === null || score === undefined) return '';
-  if (score >= 95) return '优';
-  if (score >= 85) return '良';
-  if (score >= 75) return '中';
+  if (score >= 85) return '优';
+  if (score >= 75) return '良';
+  if (score >= 65) return '中';
   return '差';
 }
 
@@ -82,6 +82,11 @@ function validatePayload(body) {
     const n = Number(body.amount);
     if (!Number.isFinite(n) || n < 0) errors.push('授信金额必须是非负数字');
     else data.amount = n;
+  }
+  if (body.exposureAmount !== undefined) {
+    const n = Number(body.exposureAmount);
+    if (!Number.isFinite(n) || n < 0) errors.push('敞口金额必须是非负数字');
+    else data.exposure_amount = n;
   }
   for (const [k, col] of [
     ['mainInvestigator', 'main_investigator'],

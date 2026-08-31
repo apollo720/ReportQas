@@ -37,8 +37,19 @@ app.use('/api', require('./routes/workflow'));
 /* 前端静态资源（vendor 已本地化，内网离线可用）
    缓存策略：HTML 与业务 css/js 用协商缓存（更新即时生效，未变更走 304）；
    vendor 第三方库内容不变，长缓存。避免发版后浏览器仍用旧样式。 */
+/* 静态资源版本化：给 index.html 内的本地资源 URL 追加 ?v=版本号，
+   发版后浏览器强制拉取新文件（vendor 为一年强缓存，靠版本号失效，避免图标/样式坏缓存） */
+const fs = require('fs');
+const { version: APP_VERSION } = require('../package.json');
+function sendIndex(res) {
+  const html = fs.readFileSync(path.join(WEB_DIR, 'index.html'), 'utf8')
+    .replace(/(src|href)="(assets\/[^"]+)"/g, `$1="$2?v=${APP_VERSION}"`);
+  res.setHeader('Cache-Control', 'no-cache');
+  res.send(html);
+}
+
 app.use(express.static(WEB_DIR, {
-  index: 'index.html',
+  index: false,
   setHeaders: (res, filePath) => {
     if (filePath.includes(path.join('assets', 'vendor'))) {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
@@ -57,7 +68,7 @@ app.use((err, req, res, next) => {
 });
 
 /* 非 API 的 GET 回退到 index.html（hash 路由其实用不到，兜底直达刷新） */
-app.get('*', (req, res) => res.sendFile(path.join(WEB_DIR, 'index.html')));
+app.get('*', (req, res) => sendIndex(res));
 
 app.listen(PORT, () => {
   console.log(`[boot] 贷款调查报告质量评价系统已启动: http://localhost:${PORT}`);
