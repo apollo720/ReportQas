@@ -67,8 +67,12 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: '服务器内部错误' });
 });
 
-/* 非 API 的 GET 回退到 index.html（hash 路由其实用不到，兜底直达刷新） */
-app.get('*', (req, res) => sendIndex(res));
+/* 非 API 的 GET 回退到 index.html（hash 路由其实用不到，兜底直达刷新）；
+   带文件扩展名的请求说明是缺失的静态资源（如 .map），返回 404 而非 HTML */
+app.get('*', (req, res) => {
+  if (/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).end();
+  sendIndex(res);
+});
 
 app.listen(PORT, () => {
   console.log(`[boot] 贷款调查报告质量评价系统已启动: http://localhost:${PORT}`);
