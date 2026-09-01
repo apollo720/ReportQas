@@ -21,6 +21,7 @@ const LEDGER_COLS = [
   { key: 'customer', title: '客户名称' },
   { key: 'approved', title: '是否核额' },
   { key: 'amount', title: '授信金额（万元）' },
+  { key: 'exposure', title: '敞口金额（万元）' },
   { key: 'main', title: '主调查人' },
   { key: 'assist', title: '辅助调查人' },
   { key: 'first', title: '第一责任人' },
@@ -64,7 +65,7 @@ router.get('/excel/export/reports', requirePerm('excel:export'), (req, res) => {
     '报告得分', '审查评价得分', '审查意见', '状态'];
   const statusLabel = { draft: '草稿', pending_review: '待负责人审查', returned: '已退回修改', archived: '已归档' };
   const data = rows.map((r) => [
-    r.id, r.orgName, r.report_date, r.customerName, r.approved, r.amount,
+    r.id, r.orgName, r.report_date, r.customerName, r.approved, r.amount, r.exposure_amount,
     r.mainInvestigatorName, r.assistantInvestigatorName, r.firstResponsibleName, r.reviewerName,
     r.score_sys, r.score_credit, r.score_asset, r.score_operate, r.score_purpose, r.score_guarantee,
     r.return1 || '', r.return2 || '', r.return3 || '', r.return4 || '',
@@ -116,11 +117,14 @@ router.get('/excel/export/stats', requirePerm('excel:export'), (req, res) => {
   sendWorkbook(res, wb, `统计分析_${groupBy}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 });
 
-/* 导出用的轻量聚合（与 stats 路由口径一致） */
+/* 导出用的轻量聚合（与 stats 路由口径一致，剔除主调查人已离职的台账） */
 function loadForExport(query) {
   const f = /^\d{4}-\d{2}-\d{2}$/.test(query.from || '') ? query.from : '2000-01-01';
   const t = /^\d{4}-\d{2}-\d{2}$/.test(query.to || '') ? query.to : '2999-12-31';
-  const rows = all('SELECT * FROM reports WHERE report_date >= ? AND report_date <= ? ORDER BY report_date', f, t)
+  const rows = all(`SELECT * FROM reports WHERE report_date >= ? AND report_date <= ?
+    AND NOT EXISTS (SELECT 1 FROM employees le
+      WHERE le.id = main_investigator AND le.status = '离职')
+    ORDER BY report_date`, f, t)
     .map(serialize);
   return { rows };
 }
@@ -144,11 +148,11 @@ function aggForExport(rows) {
 /* ---------------- 导入模板 ---------------- */
 router.get('/excel/template', requirePerm('excel:import'), (req, res) => {
   const header = LEDGER_COLS.map((c) => c.title);
-  const example = ['分行营业部', '2026-08-29', '示例客户有限公司', '是', 500,
+  const example = ['分行营业部', '2026-08-29', '示例客户有限公司', '是', 500, 300,
     '陈明远', '', '陈明远', '陈明远', '良', '优', '良', '中', '优', '良',
     '', '', '', '', ''];
   const note = ['填写说明：', '1. 请勿修改列名；机构/人员/客户按名称填写，须与系统主数据一致；',
-    '2. 质量列取值：优 / 良 / 中 / 差；是否核额：是 / 否；', '3. 审查评价为负责人评分，可留空；',
+    '2. 质量列取值：优 / 良 / 中 / 差；是否核额：是 / 否；', '3. 审查评价为负责人评分，可留空；敞口金额、授信金额留空默认为 0；',
     '4. 客户不存在时勾选"自动创建客户"即可导入。'];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([header, example, [], note]);
@@ -230,6 +234,7 @@ router.post('/excel/import', express.raw({ type: () => true, limit: '20mb' }), r
         (cell('reviewer') && !reviewerId)) return;
 
     const amount = Number(cell('amount')) || 0;
+    const exposure = Number(cell('exposure')) || 0;
 
     let custId = custs.get(custName);
     if (!custId) {
@@ -251,13 +256,13 @@ router.post('/excel/import', express.raw({ type: () => true, limit: '20mb' }), r
     const id = nextId('reports', 'BG');
     const ts = now();
     const archived = GRADE_KEYS.includes(review);
-    run(`INSERT INTO reports (id, org_id, report_date, customer_id, approved, amount,
+    run(`INSERT INTO reports (id, org_id, report_date, customer_id, approved, amount, exposure_amount,
           main_investigator, assistant_investigator, first_responsible, reviewer,
           score_sys, score_credit, score_asset, score_operate, score_purpose, score_guarantee,
           return1, return2, return3, return4, review, review_comment, review_by, status,
           submit_time, review_time, archive_time, created_by, created_at, updated_at)
-         VALUES (${Array(30).fill('?').join(', ')})`,
-      id, orgId, dateStr, custId, cell('approved') === '是' ? '是' : '否', amount,
+         VALUES (${Array(31).fill('?').join(', ')})`,
+      id, orgId, dateStr, custId, cell('approved') === '是' ? '是' : '否', amount, exposure,
       mainId, assistId, firstId, reviewerId,
       grades.s_sys, grades.s_credit, grades.s_asset, grades.s_operate, grades.s_purpose, grades.s_guarantee,
       cell('r1') || null, cell('r2') || null, cell('r3') || null, cell('r4') || null,
@@ -344,6 +349,65 @@ router.post('/excel/import-employees', express.raw({ type: () => true, limit: '2
       id, no, name, orgId, post || null, canLogin, hash, salt, ts);
     for (const r of roleKeys) run('INSERT INTO employee_roles (employee_id, role_key) VALUES (?, ?)', id, r);
     existingNos.add(no);
+    imported += 1;
+  });
+
+  if (imported) invalidateDicts();
+  res.json({ imported, skipped, total: rows.length });
+});
+
+/* ---------------- 机构导入模板 ---------------- */
+router.get('/excel/org-template', requirePerm('org:manage'), (req, res) => {
+  const header = ['机构编码', '机构名称', '上级机构', '状态'];
+  const example = ['361007', '示例支行', '九江银行股份有限公司', '启用'];
+  const note = ['填写说明：', '1. 请勿修改列名；机构编码必填且不可与系统已有编码重复，重复的行跳过；',
+    '2. 机构名称必填；上级机构为展示文本，可留空；', '3. 状态取值：启用 / 停用，留空默认为启用。'];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([header, example, [], note]);
+  ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 24 }, { wch: 10 }];
+  XLSX.utils.book_append_sheet(wb, ws, '机构导入模板');
+  sendWorkbook(res, wb, '机构导入模板.xlsx');
+});
+
+/* ---------------- 机构批量导入 ---------------- */
+router.post('/excel/import-orgs', express.raw({ type: () => true, limit: '20mb' }), requirePerm('org:manage'), (req, res) => {
+  let wb;
+  try {
+    wb = XLSX.read(req.body, { type: 'buffer', cellDates: true });
+  } catch (e) {
+    return res.status(400).json({ error: '文件解析失败，请上传 .xlsx 或 Excel「另存为 XML 表格 2003」格式的机构文件' });
+  }
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  if (!rows.length) return res.status(400).json({ error: '表格没有数据行' });
+
+  const HEADER = { code: '机构编码', name: '机构名称', parent: '上级机构', status: '状态' };
+  const cell = (raw, key) => {
+    const v = raw[HEADER[key]];
+    return v === undefined || v === null ? '' : String(v).trim();
+  };
+
+  const existingCodes = new Set(all('SELECT code FROM orgs').map((r) => r.code));
+  const ts = now();
+  const skipped = [];
+  let imported = 0;
+
+  rows.forEach((raw, idx) => {
+    const rowNo = idx + 2; /* 表头占第 1 行 */
+    const code = cell(raw, 'code');
+    const name = cell(raw, 'name');
+    const parent = cell(raw, 'parent');
+    const status = cell(raw, 'status') === '停用' ? '停用' : '启用';
+    const fail = (reason) => skipped.push({ row: rowNo, name: name || '—', reason });
+
+    if (!code) return fail('机构编码为空');
+    if (!name) return fail('机构名称为空');
+    if (existingCodes.has(code)) return fail(`机构编码「${code}」已存在`);
+
+    const id = nextPlainId('orgs', 'ORG', 3);
+    run('INSERT INTO orgs (id, code, name, parent, status, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      id, code, name, parent || null, status, ts);
+    existingCodes.add(code);
     imported += 1;
   });
 

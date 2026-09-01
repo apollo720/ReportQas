@@ -79,6 +79,12 @@ async function main() {
 
   r = await reviewer.call('GET', '/api/reports?keyword=晨光');
   check('按客户名称关键字检索', r.status === 200 && r.data.items.every((i) => i.customerName.includes('晨光')));
+  r = await reviewer.call('GET', '/api/reports?keyword=李文博');
+  check('按主调查人姓名关键字检索', r.status === 200 && r.data.items.every((i) => i.mainInvestigatorName === '李文博'));
+  r = await reviewer.call('GET', '/api/reports?keyword=陈明远');
+  check('按审批人姓名关键字检索', r.status === 200 && r.data.items.every((i) => i.reviewerName === '陈明远'));
+  r = await reviewer.call('GET', '/api/reports?keyword=BG-2026');
+  check('关键词不再匹配报告编号', r.status === 200 && r.data.total === 0, r.data.total);
 
   r = await reviewer.call('GET', '/api/reports?dateFrom=2026-08-10&dateTo=2026-08-15');
   check('按日期区间筛选', r.status === 200 && r.data.items.every((i) => i.report_date >= '2026-08-10' && i.report_date <= '2026-08-15'));
@@ -155,6 +161,9 @@ async function main() {
   check('删除附件', r.status === 200, r.data);
   r = await reviewer.call('GET', `/api/reports/${newId}/attachments`);
   check('删除后附件剩 1 条', r.data.items.length === 1, r.data.items);
+  /* 用例自清理：删除剩余附件，不污染环境 */
+  r = await reviewer.call('DELETE', `/api/reports/${newId}/attachments/${r.data.items[0].id}`);
+  check('测试附件已清理', r.status === 200, r.data);
 
   console.log('\n== 4. 待办 / 已办 ==');
   r = await reviewer.call('GET', '/api/tasks?box=todo');
@@ -229,7 +238,7 @@ async function main() {
   r = await admin.call('PUT', '/api/roles/admin/perms', { perms: ['menu:customer'] });
   check('超级管理员权限不可修改（403）', r.status === 403, r.data);
   r = await admin.call('PUT', '/api/roles/reviewer/perms', {
-    perms: ['menu:report-list', 'menu:todo', 'menu:customer', 'menu:analytics',
+    perms: ['menu:report-list', 'menu:customer', 'menu:analytics',
       'report:read', 'report:create', 'report:score', 'report:submit',
       'customer:read', 'customer:manage', 'stats:read', 'excel:import', 'excel:export']
   });
@@ -243,8 +252,8 @@ async function main() {
   check('导出台账（xlsx）', r.status === 200 && r.data.byteLength > 2000);
   const wb = XLSX.read(Buffer.from(r.data), { type: 'buffer' });
   const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-  check('导出台账表头与台账要素一致', JSON.stringify(rows[0].slice(1, 21)) === JSON.stringify([
-    '经办机构', '上报日期', '客户名称', '是否核额', '授信金额（万元）', '主调查人', '辅助调查人', '第一责任人', '审批人',
+  check('导出台账表头与台账要素一致', JSON.stringify(rows[0].slice(1, 22)) === JSON.stringify([
+    '经办机构', '上报日期', '客户名称', '是否核额', '授信金额（万元）', '敞口金额（万元）', '主调查人', '辅助调查人', '第一责任人', '审批人',
     '系统操作质量', '信用情况分析质量', '资产负债分析质量', '经营情况分析质量', '用途情况分析质量', '担保情况分析质量',
     '第一次退回原因', '第二次退回原因', '第三次退回原因', '第四次退回原因', '审查评价']), rows[0]);
 
@@ -252,12 +261,12 @@ async function main() {
   check('导出统计（xlsx）', r.status === 200 && r.data.byteLength > 1000);
 
   /* 构造导入文件：1 行有效（新客户+自动创建），1 行无效（机构不存在） */
-  const header = ['经办机构', '上报日期', '客户名称', '是否核额', '授信金额（万元）', '主调查人', '辅助调查人', '第一责任人', '审批人',
+  const header = ['经办机构', '上报日期', '客户名称', '是否核额', '授信金额（万元）', '敞口金额（万元）', '主调查人', '辅助调查人', '第一责任人', '审批人',
     '系统操作质量', '信用情况分析质量', '资产负债分析质量', '经营情况分析质量', '用途情况分析质量', '担保情况分析质量',
     '第一次退回原因', '第二次退回原因', '第三次退回原因', '第四次退回原因', '审查评价'];
-  const okRow = ['城东支行', '2026-08-29', '导入测试客户股份有限公司', '是', 660, '李文博', '王思远', '李文博', '陈明远',
+  const okRow = ['城东支行', '2026-08-29', '导入测试客户股份有限公司', '是', 660, 420, '李文博', '王思远', '李文博', '陈明远',
     '优', '良', '优', '良', '优', '良', '', '', '', '', ''];
-  const badRow = ['不存在机构', '2026-08-29', '某客户', '是', 100, '李文博', '', '李文博', '陈明远',
+  const badRow = ['不存在机构', '2026-08-29', '某客户', '是', 100, '', '李文博', '', '李文博', '陈明远',
     '优', '良', '优', '良', '优', '良', '', '', '', '', ''];
   const wsImp = XLSX.utils.aoa_to_sheet([header, okRow, badRow]);
   const wbImp = XLSX.utils.book_new();
@@ -269,6 +278,7 @@ async function main() {
 
   r = await reviewer.call('GET', '/api/reports?keyword=导入测试客户');
   check('导入的记录已入台账（草稿状态）', r.data.total === 1 && r.data.items[0].status === 'draft', r.data);
+  check('导入的敞口金额已入台账', r.data.items[0].exposure_amount === 420, r.data.items[0].exposure_amount);
   check('导入时自动创建了客户', r.data.items[0].customerName === '导入测试客户股份有限公司');
 
   r = await reviewer.call('POST', '/api/excel/import?autoCreateCustomer=1', importBuf, true);
@@ -281,7 +291,7 @@ async function main() {
     + '<Worksheet ss:Name="导入"><Table>'
     + [hdr, ...rows].map((cells) => '<Row>' + cells.map((c) => '<Cell><Data ss:Type="String">' + c + '</Data></Cell>').join('') + '</Row>').join('')
     + '</Table></Worksheet></Workbook>';
-  const xmlLedgerRow = ['城东支行', '2026-08-29', '导入XML测试客户股份有限公司', '是', 660, '李文博', '', '李文博', '陈明远',
+  const xmlLedgerRow = ['城东支行', '2026-08-29', '导入XML测试客户股份有限公司', '是', 660, 88, '李文博', '', '李文博', '陈明远',
     '优', '良', '优', '良', '优', '良', '', '', '', '', ''];
   r = await reviewer.call('POST', '/api/excel/import?autoCreateCustomer=1', Buffer.from(toXml(header, [xmlLedgerRow])), true);
   check('XML 格式导入台账', r.status === 200 && r.data.imported === 1, r.data);
@@ -343,8 +353,36 @@ async function main() {
   r = await admin.call('DELETE', `/api/employees/${builtinId}`);
   check('内置账号不可删除（403）', r.status === 403, r.data);
 
+  /* 机构批量导入：1 行有效，1 行编码重复 */
+  r = await reviewer.call('GET', '/api/excel/org-template', undefined, true);
+  check('审批人员无机构导入模板权限（403）', r.status === 403);
+  r = await admin.call('GET', '/api/excel/org-template', undefined, true);
+  check('下载机构导入模板（xlsx 字节流）', r.status === 200 && r.data.byteLength > 1000);
+  const orgHeader = ['机构编码', '机构名称', '上级机构', '状态'];
+  const orgRows = [
+    ['369001', '批量导入机构甲', '九江银行股份有限公司', '启用'],
+    ['360000', '重复编码机构', '九江银行股份有限公司', '启用']
+  ];
+  const wsOrg = XLSX.utils.aoa_to_sheet([orgHeader, ...orgRows]);
+  const wbOrg = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wbOrg, wsOrg, '机构');
+  const orgBuf = XLSX.write(wbOrg, { type: 'buffer', bookType: 'xlsx' });
+  r = await admin.call('POST', '/api/excel/import-orgs', orgBuf, true);
+  check('机构导入：1 行成功 1 行编码重复被跳过', r.status === 200 && r.data.imported === 1
+    && r.data.skipped.length === 1 && r.data.skipped[0].reason.includes('已存在'), r.data);
+
+  /* 统计剔除已离职的主调查人 */
+  r = await admin.call('GET', '/api/stats/summary');
+  const statsBefore = r.data.count;
+  r = await admin.call('GET', '/api/reports?mainInvestigatorId=E2002');
+  const lizhiCount = r.data.total;
+  r = await admin.call('PUT', '/api/employees/E2002', { name: '王思远', orgId: 'ORG002', post: '客户经理', status: '离职' });
+  r = await admin.call('GET', '/api/stats/summary');
+  check('统计剔除已离职主调查人的台账', r.data.count === statsBefore - lizhiCount, statsBefore + '-' + lizhiCount + '=' + r.data.count);
+  r = await admin.call('PUT', '/api/employees/E2002', { name: '王思远', orgId: 'ORG002', post: '客户经理', status: '在职' });
+
   /* 台账查看（仅本人经办）：客户经理按主调查人、审批人员按审批人 */
-  r = await admin.call('PUT', '/api/roles/reviewer/perms', { perms: ['menu:report-list', 'menu:todo', 'menu:customer', 'menu:analytics',
+  r = await admin.call('PUT', '/api/roles/reviewer/perms', { perms: ['menu:report-list', 'menu:customer', 'menu:analytics',
     'report:read:self', 'report:create', 'report:score', 'report:submit', 'customer:read', 'customer:manage', 'stats:read', 'excel:import', 'excel:export'] });
   const lwb = client();
   r = await admin.call('PUT', '/api/employees/E2001', { name: '李文博', orgId: 'ORG002', post: '客户经理（高级）', roleKeys: ['manager'], canLogin: true, status: '在职' });
@@ -362,7 +400,7 @@ async function main() {
   const asRev = r.data.total;
   r = await lwb.call('GET', '/api/reports');
   check('仅本人经办（审批人员）：仅见本人审批的台账', r.data.total === asRev, r.data.total + '/' + asRev);
-  r = await admin.call('PUT', '/api/roles/reviewer/perms', { perms: ['menu:report-list', 'menu:todo', 'menu:customer', 'menu:analytics',
+  r = await admin.call('PUT', '/api/roles/reviewer/perms', { perms: ['menu:report-list', 'menu:customer', 'menu:analytics',
     'report:read', 'report:create', 'report:score', 'report:submit', 'customer:read', 'customer:manage', 'stats:read', 'excel:import', 'excel:export'] });
   check('审批人员角色权限已还原', r.status === 200, r.data);
 

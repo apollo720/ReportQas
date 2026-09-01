@@ -129,8 +129,17 @@ html, body {
   background: rgba(255, 255, 255, 0.06);
 }
 .login__brand > * { position: relative; z-index: 1; }
+.login__copyright {
+  margin-top: auto;
+  font-size: 12px;
+  opacity: .78;
+  letter-spacing: .3px;
+}
 .login__logo { display: flex; align-items: center; gap: var(--td-size-4); }
-.login__logo-name { font-size: 16px; font-weight: 600; letter-spacing: .5px; }
+.login__logo-img {
+  height: 40px;
+  filter: brightness(0) invert(1); /* 深蓝底上反白显示（原图为黑色字标） */
+}
 .login__title {
   margin: 72px 0 0;
   font-size: 36px;
@@ -241,7 +250,16 @@ html, body {
 .app-main > .t-layout { height: 100%; min-height: 0; }
 
 /* 顶栏：高度按 TDesign 规范三重保险（height + min-height + inline style） */
-.t-layout__header.app-header {
+.t-layout__header.app-aside__copyright {
+  margin-top: auto;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: var(--td-text-color-placeholder);
+  white-space: nowrap;
+}
+.app-aside__copyright { position: relative; z-index: 1; }
+
+.app-header {
   height: var(--td-comp-size-xxxl);
   min-height: var(--td-comp-size-xxxl);
   flex-shrink: 0;

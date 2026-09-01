@@ -53,7 +53,6 @@ function reportScore(rec) {
 const PERM_CATALOG = [
   { group: '菜单', items: [
     { key: 'menu:report-list', label: '菜单：评价台账' },
-    { key: 'menu:todo', label: '菜单：待办/已办' },
     { key: 'menu:customer', label: '菜单：客户信息' },
     { key: 'menu:analytics', label: '菜单：统计分析' },
     { key: 'menu:sys-org', label: '菜单：机构管理' },
@@ -97,7 +96,6 @@ const MENUS = [
     key: 'grp-report', title: '调查报告评价', icon: 'file-paste', type: 'group',
     children: [
       { key: 'report-list', title: '评价台账', icon: 'list', perm: 'menu:report-list' },
-      { key: 'todo', title: '待办 / 已办', icon: 'task', perm: 'menu:todo' },
       { key: 'customer', title: '客户信息', icon: 'user-circle', perm: 'menu:customer' }
     ]
   },
@@ -121,14 +119,14 @@ const ROLE_PRESETS = [
   {
     key: 'reviewer', name: '审批人员',
     descr: '审查客户经理的调查报告：录入客户与报告基本信息，完成六项分析质量评分，登记退回原因，提交负责人审查。',
-    perms: ['menu:report-list', 'menu:todo', 'menu:customer', 'menu:analytics',
+    perms: ['menu:report-list', 'menu:customer', 'menu:analytics',
       'report:read', 'report:create', 'report:score', 'report:submit',
       'customer:read', 'customer:manage', 'stats:read', 'excel:import', 'excel:export']
   },
   {
     key: 'chief', name: '审批负责人',
     descr: '对审批人员的审查工作进行审查评价打分（审查评价）与意见填写，可退回评价修改，归档后数据进入统计。',
-    perms: ['menu:report-list', 'menu:todo', 'menu:customer', 'menu:analytics',
+    perms: ['menu:report-list', 'menu:customer', 'menu:analytics',
       'report:read', 'report:review', 'report:return', 'customer:read', 'stats:read', 'excel:export']
   },
   {

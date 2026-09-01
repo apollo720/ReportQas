@@ -98,16 +98,37 @@
         });
       }
 
+      /* 批量导入 */
+      var impVisible = Vue.ref(false);
+      var impFile = Vue.ref(null);
+      var importing = Vue.ref(false);
+      var impResult = Vue.ref(null);
+      function pickImpFile(e) { impFile.value = e.target.files && e.target.files[0]; }
+      async function doImport() {
+        if (!impFile.value) { global.LRUI.toast('warning', '请选择文件', '先选择要导入的 .xlsx / XML 机构文件'); return; }
+        importing.value = true;
+        impResult.value = null;
+        try {
+          impResult.value = await api.excel.importOrgs(impFile.value);
+          load();
+        } catch (e) { global.LRUI.handle(e, '导入失败'); }
+        importing.value = false;
+      }
+      function downloadTemplate() { global.window.open(api.excel.orgTemplateUrl); }
+
       return {
         filter: filter, filtered: filtered, loading: loading, columns: columns,
         dlgVisible: dlgVisible, dlgMode: dlgMode, form: form, saving: saving,
         openCreate: openCreate, openEdit: openEdit, save: save, deleteOrg: deleteOrg,
+        impVisible: impVisible, impFile: impFile, importing: importing, impResult: impResult,
+        pickImpFile: pickImpFile, doImport: doImport, downloadTemplate: downloadTemplate,
         statusOptions: [{ value: '启用', label: '启用' }, { value: '停用', label: '停用' }]
       };
     },
     template: [
       '<div>',
       '  <page-header title="机构管理">',
+      '    <t-button variant="outline" @click="impVisible = true"><template #icon><t-icon name="upload" /></template>批量导入</t-button>',
       '    <t-button theme="primary" @click="openCreate"><template #icon><t-icon name="add" /></template>新增机构</t-button>',
       '  </page-header>',
       '  <app-card>',
@@ -145,6 +166,26 @@
       '      <div class="form-field"><label class="form-field__label">机构名称（必填）</label><t-input v-model="form.name" /></div>',
       '      <div class="form-field"><label class="form-field__label">上级机构</label><t-input v-model="form.parent" /></div>',
       '      <div class="form-field"><label class="form-field__label">状态</label><t-select v-model="form.status" :options="statusOptions" /></div>',
+      '    </div>',
+      '  </t-dialog>',
+      '',
+      '  <t-dialog v-model:visible="impVisible" header="批量导入机构（Excel）" :footer="false" :close-on-overlay-click="false">',
+      '    <div class="notice notice--brand" style="margin-bottom:12px">',
+      '      <t-icon name="info-circle-filled" class="notice__icon" />',
+      '      <span class="text-sm">支持 .xlsx 或 Excel「另存为 → XML 表格 2003」格式；列名：机构编码 / 机构名称 / 上级机构 / 状态；编码不可与系统重复，重复的行跳过。</span>',
+      '    </div>',
+      '    <div class="form-field"><label class="form-field__label">选择 .xlsx / .xml 文件</label>',
+      '      <input type="file" accept=".xlsx,.xml" @change="pickImpFile" /></div>',
+      '    <div class="row gap-4" style="margin-top:12px">',
+      '      <t-button theme="primary" :loading="importing" @click="doImport"><template #icon><t-icon name="upload" /></template>开始导入</t-button>',
+      '      <t-button variant="outline" @click="downloadTemplate"><template #icon><t-icon name="download" /></template>下载导入模板</t-button>',
+      '    </div>',
+      '    <div v-if="impResult" style="margin-top:12px">',
+      '      <t-tag theme="success" variant="light">成功导入 {{ impResult.imported }} 个机构</t-tag>',
+      '      <t-tag v-if="impResult.skipped.length" theme="danger" variant="light" style="margin-left:8px">跳过 {{ impResult.skipped.length }} 行</t-tag>',
+      '      <div v-for="(s, i) in impResult.skipped" :key="i" class="text-sm" style="margin-top:6px;color:var(--td-error-color)">',
+      '        第 {{ s.row }} 行（{{ s.name }}）：{{ s.reason }}',
+      '      </div>',
       '    </div>',
       '  </t-dialog>',
       '</div>'
@@ -343,7 +384,7 @@
       '  </app-card>',
       '  <app-card flush>',
       '    <t-table :data="pageData" :columns="columns" row-key="id" size="small" hover bordered :loading="loading"',
-      '      :pagination="pagination" @page-change="(p) => pagination.current = p.current">',
+      '      :pagination="pagination" @page-change="(p) => { pagination.current = p.current; pagination.pageSize = p.pageSize; }">',
       '      <template #name="{ row }"><span class="cell-strong">{{ row.name }}</span></template>',
       '      <template #org="{ row }">{{ row.orgName || row.org_id }}</template>',
       '      <template #roles="{ row }">',

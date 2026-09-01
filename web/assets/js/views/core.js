@@ -30,7 +30,10 @@
       ];
 
       Vue.onMounted(function () {
-        api.health().then(function (h) { demoMode.value = !!h.demo; }).catch(function () {});
+        api.health().then(function (h) {
+          demoMode.value = !!h.demo;
+          store.version = h.version || '';
+        }).catch(function () {});
       });
 
       function fillDemo(acc) {
@@ -60,10 +63,10 @@
       '<div class="login">',
       '  <aside class="login__brand">',
       '    <div class="login__logo">',
-      '      <div class="app-brand__mark" style="background:rgba(255,255,255,.18)"><t-icon name="creditcard" size="18" /></div>',
-      '      <span class="login__logo-name">九江银行新余分行</span>',
+      '      <img class="login__logo-img" src="assets/img/jjccb-logo.png" alt="九江银行 BANK OF JIANGXI" />',
       '    </div>',
       '    <h1 class="login__title">贷款调查报告\n质量评价系统</h1>',
+      '    <div class="login__copyright">©2026 九江银行新余分行{{ store.version ? \' v\' + store.version : \'\' }}</div>',
       '  </aside>',
       '  <div class="login__form">',
       '    <div class="login__panel">',
@@ -151,6 +154,7 @@
           rows.value = data.items;
           global.LRUI.refreshCounts();
         } catch (e) { rows.value = []; }
+        pagination.current = 1;
       }
 
       Vue.onMounted(async function () {
@@ -158,14 +162,16 @@
         try { summary.value = await api.stats.summary({}); } catch (e) { summary.value = null; }
       });
       Vue.watch(tab, load);
+      var pagination = Vue.reactive({ current: 1, pageSize: 10, total: 0, showJumper: true, pageSizeOptions: [10, 20, 50] });
 
       var filteredRows = Vue.computed(function () {
         var k = keyword.value.trim();
-        if (!k) return rows.value.slice(0, 8);
+        if (!k) return rows.value;
         return rows.value.filter(function (r) {
           return r.id.indexOf(k) >= 0 || (r.customerName || '').indexOf(k) >= 0;
-        }).slice(0, 8);
+        });
       });
+      Vue.watch(filteredRows, function (l) { pagination.total = l.length; }, { immediate: true });
 
       var columns = [
         { colKey: 'id', title: '报告编号', width: 130, fixed: 'left' },
@@ -189,6 +195,7 @@
       return {
         greet: greet, me: me, isChief: isChief, isReviewer: isReviewer,
         tab: tab, keyword: keyword, kpis: kpis, rows: filteredRows, columns: columns,
+        pagination: pagination,
         open: open, actLabel: actLabel,
         evaluateCount: function () { return store.counts.evaluate; },
         reviewCount: function () { return store.counts.review; },
@@ -213,6 +220,7 @@
       '      </t-tabs>',
       '    </div>',
       '    <t-table :data="rows" :columns="columns" row-key="id" size="small" hover',
+      '      :pagination="pagination" @page-change="(p) => { pagination.current = p.current; pagination.pageSize = p.pageSize; }"',
       '      :empty="\'当前没有\' + (tab === \'todo\' ? \'待办\' : \'已办\') + \'事项\'">',
       '      <template #amount="{ row }"><span class="text-number">{{ fmtAmount(row.amount) }}</span></template>',
       '      <template #score="{ row }"><span class="text-number cell-strong">{{ row.score != null ? row.score : \'—\' }}</span></template>',
@@ -285,9 +293,8 @@
       Vue.watch(function () { return pagination.current + '/' + pagination.pageSize; }, fetchList);
 
       var columns = [
-        { colKey: 'id', title: '报告编号', width: 128, fixed: 'left' },
         { colKey: 'report_date', title: '上报日期', width: 108, fixed: 'left' },
-        { colKey: 'customerName', title: '客户名称', width: 230, ellipsis: true },
+        { colKey: 'customerName', title: '客户名称', width: 230, ellipsis: true, fixed: 'left' },
         { colKey: 'orgName', title: '经办机构', width: 110 },
         { colKey: 'approved', title: '是否核额', width: 86, align: 'center' },
         { colKey: 'amount', title: '授信金额(万)', width: 118, align: 'right' },
@@ -379,7 +386,7 @@
       '      </div>',
       '      <div>',
       '        <div class="form-field__label">关键词</div>',
-      '        <t-input v-model="filter.keyword" clearable placeholder="报告编号 / 客户 / 客户经理" style="width:220px">',
+      '        <t-input v-model="filter.keyword" clearable placeholder="客户 / 主调查人 / 审批人" style="width:220px">',
       '          <template #prefix-icon><t-icon name="search" /></template>',
       '        </t-input>',
       '      </div>',
@@ -389,12 +396,12 @@
       '',
       '  <app-card flush>',
       '    <t-table :data="rows" :columns="columns" row-key="id" size="small" hover bordered :loading="loading"',
-      '      :pagination="pagination" @page-change="(p) => pagination.current = p.current"',
+      '      :pagination="pagination" @page-change="(p) => { pagination.current = p.current; pagination.pageSize = p.pageSize; }"',
       '      @page-size-change="(s) => pagination.pageSize = s"',
       '      empty="没有符合条件的评价记录">',
       '      <template #approved="{ row }">',
-      '        <t-tag v-if="row.approved === \'是\'" theme="success" variant="light-outline">已核额</t-tag>',
-      '        <t-tag v-else theme="default" variant="light-outline">未核额</t-tag>',
+      '        <t-icon v-if="row.approved === \'是\'" name="check-circle-filled" style="color:var(--td-success-color)" title="已核额" />',
+      '        <t-icon v-else name="close-circle-filled" style="color:var(--td-text-color-placeholder)" title="未核额" />',
       '      </template>',
       '      <template #amount="{ row }"><span class="text-number">{{ fmtAmount(row.amount) }}</span></template>',
       '      <template #exposure_amount="{ row }"><span class="text-number">{{ fmtAmount(row.exposure_amount) }}</span></template>',
@@ -444,75 +451,6 @@
       '      </div>',
       '    </div>',
       '  </t-dialog>',
-      '</div>'
-    ].join('')
-  };
-
-  /* ================================================================== *
-   * 待办 / 已办（整页版）
-   * ================================================================== */
-  V.todo = {
-    name: 'ViewTodo',
-    setup: function () {
-      var store = global.LRStore;
-      var router = global.LRRouter;
-      var tab = Vue.ref('todo');
-      var rows = Vue.ref([]);
-      var isChief = Vue.computed(function () { return global.LRUI.hasPerm('report:review'); });
-
-      async function load() {
-        try {
-          var data = await api.tasks.list(tab.value);
-          rows.value = data.items;
-        } catch (e) { rows.value = []; }
-      }
-      Vue.onMounted(load);
-      Vue.watch(tab, load);
-
-      var columns = [
-        { colKey: 'id', title: '报告编号', width: 130 },
-        { colKey: 'customerName', title: '客户名称', width: 240, ellipsis: true },
-        { colKey: 'orgName', title: '经办机构', width: 120 },
-        { colKey: 'report_date', title: '上报日期', width: 110 },
-        { colKey: 'node', title: '当前节点', width: 170 },
-        { colKey: 'score', title: '报告得分', width: 100, align: 'right' },
-        { colKey: 'status', title: '状态', width: 120 },
-        { colKey: 'op', title: '操作', width: 120, align: 'center' }
-      ];
-
-      function nodeOf(row) {
-        if (row.status === 'draft') return '① 评价录入（审批人员）';
-        if (row.status === 'returned') return '① 评价录入（已退回）';
-        if (row.status === 'pending_review') return '② 负责人审查评价';
-        return '③ 已归档';
-      }
-
-      return {
-        tab: tab, rows: rows, columns: columns, nodeOf: nodeOf, isChief: isChief,
-        open: function (row) { router.go('report-detail', { id: row.id }); }
-      };
-    },
-    template: [
-      '<div>',
-      '  <page-header title="待办 / 已办" />',
-      '  <app-card flush>',
-      '    <div style="padding:0 16px;border-bottom:1px solid var(--td-border-level-1-color)">',
-      '      <t-tabs v-model="tab">',
-      '        <t-tab-panel value="todo" :label="\'待我处理 \' + rows.length" />',
-      '        <t-tab-panel value="done" label="我已处理" />',
-      '      </t-tabs>',
-      '    </div>',
-      '    <t-table :data="rows" :columns="columns" row-key="id" size="small" hover>',
-      '      <template #score="{ row }"><span class="text-number cell-strong">{{ row.score != null ? row.score : \'—\' }}</span></template>',
-      '      <template #node="{ row }"><span class="text-secondary">{{ nodeOf(row) }}</span></template>',
-      '      <template #status="{ row }">',
-      '        <t-tag :theme="STATUS_MAP[row.status].theme" variant="light">{{ STATUS_MAP[row.status].label }}</t-tag>',
-      '      </template>',
-      '      <template #op="{ row }">',
-      '        <t-link theme="primary" hover="color" @click="open(row)">处理</t-link>',
-      '      </template>',
-      '    </t-table>',
-      '  </app-card>',
       '</div>'
     ].join('')
   };

@@ -143,7 +143,7 @@
       '',
       '  <app-card flush>',
       '    <t-table :data="pageData" :columns="columns" row-key="id" size="small" hover bordered :loading="loading"',
-      '      :pagination="pagination" @page-change="(p) => pagination.current = p.current">',
+      '      :pagination="pagination" @page-change="(p) => { pagination.current = p.current; pagination.pageSize = p.pageSize; }">',
       '      <template #name="{ row }"><span class="cell-strong">{{ row.name }}</span></template>',
       '      <template #reportCount="{ row }"><span class="text-number">{{ row.reportCount }}</span></template>',
       '      <template #op="{ row }">',

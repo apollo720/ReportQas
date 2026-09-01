@@ -231,13 +231,16 @@
         var files = e.target.files;
         if (!files || !files.length) return;
         attUploading.value = true;
-        var ok = 0, fail = 0;
+        var ok = 0, fail = 0, failMsg = '';
         try {
           for (var i = 0; i < files.length; i++) {
             try { await api.reports.uploadAttachment(record.value.id, files[i]); ok += 1; }
-            catch (err) { fail += 1; }
+            catch (err) {
+              fail += 1;
+              if (!failMsg) failMsg = files[i].name + '：' + (err && err.message ? err.message : '未知错误');
+            }
           }
-          if (fail) global.LRUI.toast('warning', '部分附件上传失败', ok + ' 个成功，' + fail + ' 个失败');
+          if (fail) global.LRUI.toast('warning', '部分附件上传失败', ok + ' 个成功，' + fail + ' 个失败。' + failMsg);
           else global.LRUI.toast('success', '附件已上传', '共 ' + ok + ' 个文件');
           attachments.value = (await api.reports.attachments(record.value.id)).items;
         } catch (e2) { global.LRUI.handle(e2, '上传失败'); }

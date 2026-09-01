@@ -39,6 +39,7 @@
     user: null,          /* 服务端会话用户（含 perms / menus / roles） */
     counts: { evaluate: 0, returned: 0, review: 0, returnedByChief: 0 },
     meta: null,          /* 主数据/字典缓存（机构、员工、客户等） */
+    version: '',         /* 服务版本号（/api/health 下发） */
     collapsed: false,
     booted: false
   });
@@ -214,7 +215,7 @@
         pwdVisible: pwdVisible, pwdForm: pwdForm, pwdSaving: pwdSaving, savePassword: savePassword,
         onLogout: onLogout,
         toggle: function () { store.collapsed = !store.collapsed; },
-        goTodo: function () { router.go('todo'); }
+        goTodo: function () { router.go('dashboard'); }
       };
     },
     template: [
@@ -248,6 +249,7 @@
       '        </template>',
       '      </t-menu>',
       '    </div>',
+      '    <div class="app-aside__copyright" v-show="!collapsed">©2026 九江银行新余分行{{ store.version ? \' v\' + store.version : \'\' }}</div>',
       '  </aside>',
       '',
       '  <div class="app-main">',
@@ -334,6 +336,9 @@
     gp.LRAPI = api;
 
     router.parse();
+
+    /* 版本号（页脚版权展示用，无鉴权） */
+    api.health().then(function (h) { store.version = h.version || ''; }).catch(function () {});
 
     /* 会话恢复 */
     try {

@@ -2,7 +2,7 @@
 # 用法：docker compose -f docker-compose.prod.yml up -d
 services:
   loan-report-qas:
-    image: loan-report-qas:1.2.1
+    image: loan-report-qas:1.2.5
     container_name: loan-report-qas
     ports:
       - "3000:3000"

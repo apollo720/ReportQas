@@ -5,7 +5,7 @@
  */
 'use strict';
 
-const { get, run, all, now, nextPlainId, DATA_DIR } = require('./db');
+const { get, run, all, now, nextPlainId } = require('./db');
 const { hashPassword } = require('./auth');
 const { ROLE_PRESETS } = require('./constants');
 
@@ -119,13 +119,7 @@ function seed() {
   run('DELETE FROM sessions');
   run('DELETE FROM reports');
   run('DELETE FROM attachments');
-  /* 清理已上传的附件文件 */
-  {
-    const fs = require('fs');
-    const path = require('path');
-    const uploadRoot = path.join(DATA_DIR, 'uploads');
-    if (fs.existsSync(uploadRoot)) fs.rmSync(uploadRoot, { recursive: true, force: true });
-  }
+  /* 注意：data/uploads 为用户上传附件的留存目录，seed 不做清理 */
   run('DELETE FROM employee_roles');
   run('DELETE FROM employees');
   run('DELETE FROM customers');

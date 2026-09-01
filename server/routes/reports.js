@@ -54,9 +54,16 @@ router.post('/reports/:id/attachments', express.raw({ type: () => true, limit: '
   const ins = run('INSERT INTO attachments (report_id, filename, size, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?)',
     report.id, filename, req.body.length, req.user.id, now());
   const attId = Number(ins.lastInsertRowid);
-  const dir = path.join(UPLOAD_ROOT, report.id);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, String(attId)), req.body);
+  try {
+    const dir = path.join(UPLOAD_ROOT, report.id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, String(attId)), req.body);
+  } catch (e) {
+    /* 写盘失败回滚附件行，返回可定位的错误而非笼统 500 */
+    run('DELETE FROM attachments WHERE id = ?', attId);
+    console.error('[attachment] 写盘失败:', e.message);
+    return res.status(500).json({ error: '附件写入失败：存储目录不可写（' + (e.code || '未知') + '），请检查 data/uploads 权限' });
+  }
   logAction(report.id, req.user, 'upload', `上传附件「${filename}」`);
   res.json({ id: attId, filename, size: req.body.length });
 });
@@ -106,8 +113,12 @@ router.get('/reports', requireAuth, (req, res) => {
   }
 
   if (q.keyword) {
-    where.push('(r.id LIKE ? OR c.name LIKE ?)');
-    params.push(`%${q.keyword}%`, `%${q.keyword}%`);
+    const k = `%${q.keyword}%`;
+    /* 按客户名称 / 主调查人姓名 / 审批人姓名检索（台账存人员 ID，用子查询匹配姓名） */
+    where.push(`(c.name LIKE ? OR EXISTS (SELECT 1 FROM employees em
+      WHERE em.id = r.main_investigator AND em.name LIKE ?)
+      OR EXISTS (SELECT 1 FROM employees em WHERE em.id = r.reviewer AND em.name LIKE ?))`);
+    params.push(k, k, k);
   }
   if (q.orgId) { where.push('r.org_id = ?'); params.push(q.orgId); }
   if (q.status) { where.push('r.status = ?'); params.push(q.status); }

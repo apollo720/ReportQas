@@ -13,8 +13,8 @@
 # 在有外网的机器上构建镜像（或使用内网镜像仓库）
 docker compose up -d          # 构建 + 启动，监听 3000 端口
 # 或者分步执行：
-docker build -t loan-report-qas:1.2.1 .
-docker run -d --name loan-report-qas -p 3000:3000 -v "$PWD/data:/app/data" loan-report-qas:1.2.1
+docker build -t loan-report-qas:1.2.5 .
+docker run -d --name loan-report-qas -p 3000:3000 -v "$PWD/data:/app/data" loan-report-qas:1.2.5
 ```
 
 - 首次启动自动建库并灌入演示数据（8 机构 / 15 员工 / 12 客户 / 24 笔台账）

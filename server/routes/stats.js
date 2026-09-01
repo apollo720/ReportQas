@@ -62,6 +62,9 @@ function loadRows(query, user) {
     /* 仅本人相关：与台账查看（仅本人经办）同口径，按角色判定 */
     scope = ' AND ' + selfScopeSql(user.id, user.roles.map((r) => r.key));
   }
+  /* 主调查人已离职的台账不纳入任何统计 */
+  scope += ` AND NOT EXISTS (SELECT 1 FROM employees le
+    WHERE le.id = r.main_investigator AND le.status = '离职')`;
 
   const rows = all(
     `SELECT r.* FROM reports r WHERE r.report_date >= ? AND r.report_date <= ?${scope}

@@ -24,7 +24,7 @@ if (process.env.LR_SEED_DEMO !== '0' && seedIfEmpty()) {
 ensureBuiltin();
 
 /* API 路由 */
-app.get('/api/health', (req, res) => res.json({ ok: true, ts: Date.now(), demo: process.env.LR_SEED_DEMO !== '0' }));
+app.get('/api/health', (req, res) => res.json({ ok: true, ts: Date.now(), demo: process.env.LR_SEED_DEMO !== '0', version: APP_VERSION }));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api', require('./routes/meta'));
 app.use('/api', require('./routes/master'));

@@ -131,6 +131,7 @@
     excel: {
       templateUrl: '/api/excel/template',
       employeeTemplateUrl: '/api/excel/employee-template',
+      orgTemplateUrl: '/api/excel/org-template',
       exportReportsUrl: function (params) { return '/api/excel/export/reports' + buildQuery(params); },
       exportStatsUrl: function (params) { return '/api/excel/export/stats' + buildQuery(params); },
       import: async function (file, autoCreateCustomer) {
@@ -140,6 +141,10 @@
       importEmployees: async function (file) {
         var buf = await file.arrayBuffer();
         return call('POST', '/api/excel/import-employees', buf, true);
+      },
+      importOrgs: async function (file) {
+        var buf = await file.arrayBuffer();
+        return call('POST', '/api/excel/import-orgs', buf, true);
       }
     }
   };
