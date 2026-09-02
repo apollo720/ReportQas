@@ -104,10 +104,10 @@ router.get('/excel/export/stats', requirePerm('excel:export'), (req, res) => {
   };
 
   const header = ['名称', '审查笔数', '报告平均得分', '报告优良占比(%)', '已审查笔数',
-    '审查评价平均分', '审查评价优良占比(%)', '退回次数', '授信金额合计(万元)'];
+    '审查评价平均分', '审查评价优良占比(%)', '平均退回次数', '授信金额合计(万元)', '敞口金额合计(万元)'];
   const data = [...groups.keys()].map((key) => {
     const g = aggForExport(groups.get(key));
-    return [nameOf(key), g.count, g.avgScore, g.goodRate, g.reviewed, g.reviewAvg, g.reviewGoodRate, g.returns, g.amount];
+    return [nameOf(key), g.count, g.avgScore, g.goodRate, g.reviewed, g.reviewAvg, g.reviewGoodRate, g.avgReturns, g.amount, g.exposure];
   });
 
   const wb = XLSX.utils.book_new();
@@ -141,7 +141,9 @@ function aggForExport(rows) {
     reviewAvg: reviewed.length ? r1(reviewed.reduce((a, r) => a + r.reviewScore, 0) / reviewed.length) : '',
     reviewGoodRate: reviewed.length ? r1(reviewed.filter((r) => ['优', '良'].includes(r.review)).length / reviewed.length * 100) : '',
     returns: rows.reduce((a, r) => a + r.returnCount, 0),
-    amount: r1(rows.reduce((a, r) => a + (r.amount || 0), 0))
+    avgReturns: rows.length ? r1(rows.reduce((a, r) => a + r.returnCount, 0) / rows.length) : '',
+    amount: r1(rows.reduce((a, r) => a + (r.amount || 0), 0)),
+    exposure: r1(rows.reduce((a, r) => a + (r.exposure_amount || 0), 0))
   };
 }
 

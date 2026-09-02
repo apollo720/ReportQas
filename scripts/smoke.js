@@ -186,6 +186,7 @@ async function main() {
 
   r = await reviewer.call('GET', '/api/stats/aggregate?groupBy=org');
   check('按机构聚合', r.status === 200 && r.data.items.length >= 6 && r.data.items[0].name.includes('支行') || r.data.items[0].name.includes('营业部'), r.data.items.slice(0, 2));
+  check('聚合含敞口金额合计', r.data.items.every((i) => typeof i.exposure === 'number'), r.data.items[0]);
   r = await reviewer.call('GET', '/api/stats/aggregate?groupBy=manager');
   check('按客户经理聚合（含优良占比）', r.status === 200 && r.data.items.every((i) => typeof i.goodRate === 'number' || i.goodRate === null));
   r = await reviewer.call('GET', '/api/stats/aggregate?groupBy=reviewer');

@@ -92,7 +92,9 @@ function aggOf(rows) {
       ? Math.round(reviewed.filter((r) => ['优', '良'].includes(r.review)).length / reviewed.length * 1000) / 10
       : null,
     returns: sum(rows, (r) => r.returnCount),
-    amount: Math.round(sum(rows, (r) => r.amount || 0) * 10) / 10
+    avgReturns: n ? round1(sum(rows, (r) => r.returnCount) / n) : null,
+    amount: Math.round(sum(rows, (r) => r.amount || 0) * 10) / 10,
+    exposure: Math.round(sum(rows, (r) => r.exposure_amount || 0) * 10) / 10
   };
 }
 

@@ -241,8 +241,9 @@
         { colKey: 'reviewed', title: '已审查', width: 88, align: 'right' },
         { colKey: 'reviewAvg', title: '审查评价平均', width: 116, align: 'right' },
         { colKey: 'reviewGoodRate', title: '审查优良占比', width: 96, align: 'right' },
-        { colKey: 'returns', title: '退回次数', width: 92, align: 'right' },
-        { colKey: 'amount', title: '授信金额合计（万元）', width: 160, align: 'right' }
+        { colKey: 'avgReturns', title: '平均退回次数', width: 108, align: 'right' },
+        { colKey: 'amount', title: '授信金额合计（万元）', width: 160, align: 'right' },
+        { colKey: 'exposure', title: '敞口金额合计（万元）', width: 160, align: 'right' }
       ];
 
       var trendEl = Vue.ref(null);
@@ -390,12 +391,13 @@
       '      <template #reviewed="{ row }"><span class="text-number">{{ row.reviewed }}</span></template>',
       '      <template #reviewAvg="{ row }"><span class="text-number">{{ fmt(row.reviewAvg) }}</span></template>',
       '      <template #reviewGoodRate="{ row }"><span class="text-number">{{ fmt(row.reviewGoodRate) }}{{ row.reviewGoodRate != null ? \'%\' : \'\' }}</span></template>',
-      '      <template #returns="{ row }">',
-      '        <span class="text-number" :style="row.returns >= row.count ? \'color:var(--td-error-color)\' : \'\'">{{ row.returns }}</span>',
+      '      <template #avgReturns="{ row }">',
+      '        <span class="text-number" :style="row.avgReturns >= 1 ? \'color:var(--td-error-color)\' : \'\'">{{ row.avgReturns != null ? row.avgReturns : \'—\' }}</span>',
       '      </template>',
       '      <template #amount="{ row }"><span class="text-number">{{ row.amount.toLocaleString() }}</span></template>',
+      '      <template #exposure="{ row }"><span class="text-number">{{ (row.exposure || 0).toLocaleString() }}</span></template>',
       '    </t-table>',
-      '    <template #foot><span class="text-sm">口径：报告得分 = 六维平均（考核客户经理）；审查评价 = 负责人对审批人员审查工作的评分，单列统计；优良占比 = 得分 ≥ 80 的笔数占比</span></template>',
+      '    <template #foot><span class="text-sm">口径：报告得分 = 六维平均（考核客户经理）；审查评价 = 负责人对审批人员审查工作的评分，单列统计；优良占比 = 得分 ≥ 80 的笔数占比；平均退回次数 = 退回次数合计 ÷ 审查笔数</span></template>',
       '  </app-card>',
       '</div>'
     ].join('')

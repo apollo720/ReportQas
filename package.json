@@ -1,6 +1,6 @@
 {
   "name": "loan-report-qas",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "private": true,
   "description": "贷款调查报告质量评价系统 —— 授信审批部评价台账线上化",
   "main": "server/index.js",

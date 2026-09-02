@@ -230,6 +230,11 @@
       async function uploadAttachments(e) {
         var files = e.target.files;
         if (!files || !files.length) return;
+        /* 新建页：先自动暂存草稿（生成台账编号）再上传；要素未填全时中止并提示 */
+        if (isNew.value) {
+          await saveDraft(true);
+          if (isNew.value) return;
+        }
         attUploading.value = true;
         var ok = 0, fail = 0, failMsg = '';
         try {
@@ -461,7 +466,7 @@
       '    </div>',
       '  </app-card>',
       '',
-      '  <app-card v-if="!isNew" title="附件">',
+      '  <app-card title="附件">',
       '    <div class="row gap-4" style="margin-bottom:12px" v-if="canScorePerm">',
       '      <label class="t-button t-button--variant-outline t-button--theme-default" style="cursor:pointer;position:relative;overflow:hidden"',
       '        :class="attUploading ? \'t-is-loading\' : \'\'">',
