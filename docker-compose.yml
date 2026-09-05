@@ -1,7 +1,7 @@
 services:
   loan-report-qas:
     build: .
-    image: loan-report-qas:1.2.6
+    image: loan-report-qas:1.2.7
     container_name: loan-report-qas
     ports:
       - "3000:3000"

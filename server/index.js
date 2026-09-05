@@ -41,11 +41,18 @@ app.use('/api', require('./routes/workflow'));
    发版后浏览器强制拉取新文件（vendor 为一年强缓存，靠版本号失效，避免图标/样式坏缓存） */
 const fs = require('fs');
 const { version: APP_VERSION } = require('../package.json');
+let indexCache = { mtimeMs: 0, html: '' };
 function sendIndex(res) {
-  const html = fs.readFileSync(path.join(WEB_DIR, 'index.html'), 'utf8')
-    .replace(/(src|href)="(assets\/[^"]+)"/g, `$1="$2?v=${APP_VERSION}"`);
+  const file = path.join(WEB_DIR, 'index.html');
+  const mtimeMs = fs.statSync(file).mtimeMs;
+  if (indexCache.mtimeMs !== mtimeMs) {
+    indexCache = {
+      mtimeMs,
+      html: fs.readFileSync(file, 'utf8').replace(/(src|href)="(assets\/[^"]+)"/g, `$1="$2?v=${APP_VERSION}"`)
+    };
+  }
   res.setHeader('Cache-Control', 'no-cache');
-  res.send(html);
+  res.send(indexCache.html);
 }
 
 app.use(express.static(WEB_DIR, {

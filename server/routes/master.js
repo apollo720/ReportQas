@@ -5,7 +5,7 @@
 'use strict';
 
 const express = require('express');
-const { all, get, run, now, nextPlainId, nextDailyId } = require('../db');
+const { all, get, run, now, nextPlainId, nextDailyId, retryOnUnique } = require('../db');
 const { hashPassword, requireAuth, requirePerm } = require('../auth');
 const { ROLE_PRESETS } = require('../constants');
 const { invalidateDicts } = require('../report-util');
@@ -30,11 +30,14 @@ router.post('/orgs', requirePerm('org:manage'), (req, res) => {
   if (get('SELECT id FROM orgs WHERE code = ?', trim(code))) {
     return res.status(400).json({ error: '机构编码已存在' });
   }
-  const id = nextPlainId('orgs', 'ORG', 3);
-  run('INSERT INTO orgs (id, code, name, parent, status, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    id, trim(code), trim(name), trim(parent) || null, status === '停用' ? '停用' : '启用', now());
+  let orgId;
+  retryOnUnique(() => {
+    orgId = nextPlainId('orgs', 'ORG', 3);
+    run('INSERT INTO orgs (id, code, name, parent, status, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      orgId, trim(code), trim(name), trim(parent) || null, status === '停用' ? '停用' : '启用', now());
+  });
   invalidateDicts();
-  res.json({ id });
+  res.json({ id: orgId });
 });
 
 router.put('/orgs/:id', requirePerm('org:manage'), (req, res) => {
@@ -97,16 +100,19 @@ router.post('/employees', requirePerm('employee:manage'), (req, res) => {
   for (const r of roles) {
     if (!get('SELECT key FROM roles WHERE key = ?', r)) return res.status(400).json({ error: '角色不存在：' + r });
   }
-  const id = nextPlainId('employees', 'E', 4);
   const pwd = String(password || '123456');
   const { salt, hash } = hashPassword(pwd);
-  run(`INSERT INTO employees (id, no, name, org_id, post, status, can_login, password_hash, salt, created_at)
-       VALUES (?, ?, ?, ?, ?, '在职', ?, ?, ?, ?)`,
-    id, trim(no), trim(name), trim(orgId) || null, trim(post) || null,
-    canLogin === 0 ? 0 : 1, hash, salt, now());
-  for (const r of roles) run('INSERT INTO employee_roles (employee_id, role_key) VALUES (?, ?)', id, r);
+  let empId;
+  retryOnUnique(() => {
+    empId = nextPlainId('employees', 'E', 4);
+    run(`INSERT INTO employees (id, no, name, org_id, post, status, can_login, password_hash, salt, created_at)
+         VALUES (?, ?, ?, ?, ?, '在职', ?, ?, ?, ?)`,
+      empId, trim(no), trim(name), trim(orgId) || null, trim(post) || null,
+      canLogin === 0 ? 0 : 1, hash, salt, now());
+    for (const r of roles) run('INSERT INTO employee_roles (employee_id, role_key) VALUES (?, ?)', empId, r);
+  });
   invalidateDicts();
-  res.json({ id });
+  res.json({ id: empId });
 });
 
 router.put('/employees/:id', requirePerm('employee:manage'), (req, res) => {
@@ -218,14 +224,18 @@ router.post('/customers', requirePerm('customer:manage'), (req, res) => {
   if (get('SELECT id FROM customers WHERE name = ?', trim(name))) {
     return res.status(400).json({ error: '客户名称已存在' });
   }
-  const id = nextPlainId('customers', 'C', 3);
-  const no = nextDailyId('customers', 'no', 'KH');
-  run(`INSERT INTO customers (id, no, name, industry, scale, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    id, no, trim(name),
-    trim(industry) || null, trim(scale) || null, now());
+  let newId;
+  retryOnUnique(() => {
+    const id = nextPlainId('customers', 'C', 3);
+    const no = nextDailyId('customers', 'no', 'KH');
+    run(`INSERT INTO customers (id, no, name, industry, scale, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      id, no, trim(name),
+      trim(industry) || null, trim(scale) || null, now());
+    newId = id;
+  });
   invalidateDicts();
-  res.json({ id });
+  res.json({ id: newId });
 });
 
 router.delete('/customers/:id', requirePerm('customer:delete'), (req, res) => {

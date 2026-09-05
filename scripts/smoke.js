@@ -146,24 +146,31 @@ async function main() {
     r.data.item.score === 83.3 && r.data.item.reviewScore === 80,
     { score: r.data.item.score, reviewScore: r.data.item.reviewScore });
 
-  /* 附件：审批人员多附件上传 / 下载 / 删除；无权限上传被拒 */
-  r = await reviewer.call('POST', `/api/reports/${newId}/attachments?name=${encodeURIComponent('审查附件一.txt')}`, Buffer.from('附件内容A'), true);
-  check('上传附件一', r.status === 200 && r.data.filename === '审查附件一.txt', r.data);
-  r = await reviewer.call('POST', `/api/reports/${newId}/attachments?name=${encodeURIComponent('审查附件二.txt')}`, Buffer.from('附件内容BB'), true);
-  check('上传附件二', r.status === 200, r.data);
-  r = await chief.call('POST', `/api/reports/${newId}/attachments?name=x.txt`, Buffer.from('x'), true);
+  /* 附件：审批人员多附件上传 / 下载 / 删除（草稿态）；无权限上传被拒；归档后锁定 */
+  r = await reviewer.call('POST', '/api/reports', { orgId: 'ORG002', reportDate: '2026-08-30', customerId: 'C003', approved: '否', amount: 100, mainInvestigator: 'E2001' });
+  const attDraft = r.data.id;
+  check('附件测试草稿创建', r.status === 200 && !!attDraft, r.data);
+  r = await chief.call('POST', `/api/reports/${attDraft}/attachments?name=x.txt`, Buffer.from('x'), true);
   check('无 report:score 权限上传被拒（403）', r.status === 403, r.data);
-  r = await reviewer.call('GET', `/api/reports/${newId}/attachments`);
+  r = await reviewer.call('POST', `/api/reports/${attDraft}/attachments?name=${encodeURIComponent('审查附件一.txt')}`, Buffer.from('附件内容A'), true);
+  check('上传附件一', r.status === 200 && r.data.filename === '审查附件一.txt', r.data);
+  r = await reviewer.call('POST', `/api/reports/${attDraft}/attachments?name=${encodeURIComponent('审查附件二.txt')}`, Buffer.from('附件内容BB'), true);
+  check('上传附件二', r.status === 200, r.data);
+  r = await reviewer.call('GET', `/api/reports/${attDraft}/attachments`);
   check('附件列表返回 2 条', r.data.items.length === 2, r.data.items);
-  r = await reviewer.call('GET', `/api/reports/${newId}/attachments/${r.data.items[0].id}`, undefined, true);
+  r = await reviewer.call('GET', `/api/reports/${attDraft}/attachments/${r.data.items[0].id}`, undefined, true);
   check('附件下载内容一致', r.status === 200 && Buffer.from(r.data).toString() === '附件内容A');
-  r = await reviewer.call('DELETE', `/api/reports/${newId}/attachments/${(await reviewer.call('GET', `/api/reports/${newId}/attachments`)).data.items[1].id}`);
+  r = await reviewer.call('DELETE', `/api/reports/${attDraft}/attachments/${(await reviewer.call('GET', `/api/reports/${attDraft}/attachments`)).data.items[1].id}`);
   check('删除附件', r.status === 200, r.data);
-  r = await reviewer.call('GET', `/api/reports/${newId}/attachments`);
+  r = await reviewer.call('GET', `/api/reports/${attDraft}/attachments`);
   check('删除后附件剩 1 条', r.data.items.length === 1, r.data.items);
   /* 用例自清理：删除剩余附件，不污染环境 */
-  r = await reviewer.call('DELETE', `/api/reports/${newId}/attachments/${r.data.items[0].id}`);
+  r = await reviewer.call('DELETE', `/api/reports/${attDraft}/attachments/${(await reviewer.call('GET', `/api/reports/${attDraft}/attachments`)).data.items[0].id}`);
   check('测试附件已清理', r.status === 200, r.data);
+  r = await admin.call('DELETE', `/api/reports/${attDraft}`);
+  check('附件测试草稿已删除', r.status === 200, r.data);
+  r = await reviewer.call('POST', `/api/reports/${newId}/attachments?name=x.txt`, Buffer.from('x'), true);
+  check('归档后附件上传被锁定（400）', r.status === 400, r.data);
 
   console.log('\n== 4. 待办 / 已办 ==');
   r = await reviewer.call('GET', '/api/tasks?box=todo');
@@ -228,7 +235,7 @@ async function main() {
   check('新增员工并分配角色', r.status === 200, r.data);
   const smokeEmp = client();
   r = await smokeEmp.call('POST', '/api/auth/login', { no: '901099', password: 'test123456' });
-  check('新员工可登录且具备角色权限', r.status === 200 && r.data.user.perms.includes('report:score'));
+  check('新员工可登录且具备角色权限', r.status === 200 && r.data.user.perms.includes('report:score'), r.status + '|' + (r.data.error || ''));
 
   r = await admin.call('GET', '/api/roles');
   check('角色列表含权限矩阵', r.data.items.length === 4 && Array.isArray(r.data.items[0].perms));
@@ -404,6 +411,29 @@ async function main() {
   r = await admin.call('PUT', '/api/roles/reviewer/perms', { perms: ['menu:report-list', 'menu:customer', 'menu:analytics',
     'report:read', 'report:create', 'report:score', 'report:submit', 'customer:read', 'customer:manage', 'stats:read', 'excel:import', 'excel:export'] });
   check('审批人员角色权限已还原', r.status === 200, r.data);
+
+  /* 登录失败锁定：连续 5 次失败后临时锁定（随机工号避免跨轮残留） */
+  const lockNo = '905' + String(Date.now()).slice(-3);
+  const lockCli = client();
+  r = await admin.call('POST', '/api/employees', { no: lockNo, name: '锁定测试员工', orgId: 'ORG000', roleKeys: ['reviewer'], password: 'test123456' });
+  check('锁定测试员工创建', r.status === 200, r.data);
+  const lockEmpId = r.data.id;
+  for (let i = 0; i < 5; i++) {
+    r = await lockCli.call('POST', '/api/auth/login', { no: lockNo, password: 'wrong-password' });
+    if (i === 4) check('第 5 次失败仍返回 401（未提前锁定）', r.status === 401, r.status);
+  }
+  r = await lockCli.call('POST', '/api/auth/login', { no: lockNo, password: 'test123456' });
+  check('连续 5 次失败后账号临时锁定（429）', r.status === 429, r.status);
+  r = await admin.call('DELETE', `/api/employees/${lockEmpId}`);
+  check('锁定测试员工已清理', r.status === 200, r.data);
+
+  /* 密码复杂度：自改密码需 ≥8 位且含字母与数字 */
+  r = await reviewer.call('POST', '/api/auth/password', { oldPassword: '123456', newPassword: '123' });
+  check('弱密码被拒绝（400）', r.status === 400, r.data);
+  r = await reviewer.call('POST', '/api/auth/password', { oldPassword: '123456', newPassword: 'reviewer2026' });
+  check('修改为复杂密码成功', r.status === 200, r.data);
+  r = await reviewer.call('POST', '/api/auth/password', { oldPassword: 'reviewer2026', newPassword: '123456' });
+  check('不满足复杂度的密码改回被拒绝（400）', r.status === 400, r.data);
 
   console.log('\n== 8. 收尾 ==');
   r = await admin.call('DELETE', `/api/reports/${newId}`);

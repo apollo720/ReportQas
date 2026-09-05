@@ -60,7 +60,9 @@ function loadRows(query, user) {
   if (!user.perms.includes('stats:read')) {
     if (!user.perms.includes('stats:read:self')) return { error: '没有查看统计的权限' };
     /* 仅本人相关：与台账查看（仅本人经办）同口径，按角色判定 */
-    scope = ' AND ' + selfScopeSql(user.id, user.roles.map((r) => r.key));
+    const sc = selfScopeSql(user.id, user.roles.map((r) => r.key));
+    scope = ' AND ' + sc.sql;
+    params.push(...sc.params);
   }
   /* 主调查人已离职的台账不纳入任何统计 */
   scope += ` AND NOT EXISTS (SELECT 1 FROM employees le

@@ -10,7 +10,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { all, get, run, now, nextId, DATA_DIR } = require('../db');
+const { all, get, run, now, nextId, retryOnUnique, DATA_DIR } = require('../db');
 const { requireAuth, requirePerm } = require('../auth');
 const { GRADE_MAP, reportScore } = require('../constants');
 const { serialize, validatePayload, logAction, selfScopeSql } = require('../report-util');
@@ -30,10 +30,13 @@ function canViewRecord(u, row) {
          (ids.includes('reviewer') && row.reviewer === u.id);
 }
 
-/* ---------------- 附件（审批人员上传，多个） ---------------- */
+/* ---------------- 附件（审批人员上传，多个；归档/待审查后锁定） ---------------- */
 const UPLOAD_ROOT = path.join(DATA_DIR, 'uploads');
+const ATTACH_LIMIT = 50 * 1024 * 1024;
 const safeName = (name) => String(name || '附件')
   .split(/[\\/]/).pop().replace(/[\x00-\x1f]/g, '').slice(0, 120) || '附件';
+/* 附件仅可在评价内容可编辑的阶段操作（草稿/已退回），归档与待审查后锁定 */
+const attachmentsEditable = (report) => ['draft', 'returned'].includes(report.status);
 
 router.get('/reports/:id/attachments', (req, res) => {
   const report = get('SELECT * FROM reports WHERE id = ?', req.params.id);
@@ -46,26 +49,48 @@ router.get('/reports/:id/attachments', (req, res) => {
   res.json({ items });
 });
 
-router.post('/reports/:id/attachments', express.raw({ type: () => true, limit: '50mb' }), requirePerm('report:score'), (req, res) => {
+router.post('/reports/:id/attachments', requirePerm('report:score'), (req, res) => {
   const report = get('SELECT * FROM reports WHERE id = ?', req.params.id);
   if (!report) return res.status(404).json({ error: '记录不存在' });
-  if (!req.body || !req.body.length) return res.status(400).json({ error: '附件内容为空' });
-  const filename = safeName(req.query.name || '');
-  const ins = run('INSERT INTO attachments (report_id, filename, size, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?)',
-    report.id, filename, req.body.length, req.user.id, now());
-  const attId = Number(ins.lastInsertRowid);
-  try {
-    const dir = path.join(UPLOAD_ROOT, report.id);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, String(attId)), req.body);
-  } catch (e) {
-    /* 写盘失败回滚附件行，返回可定位的错误而非笼统 500 */
-    run('DELETE FROM attachments WHERE id = ?', attId);
-    console.error('[attachment] 写盘失败:', e.message);
-    return res.status(500).json({ error: '附件写入失败：存储目录不可写（' + (e.code || '未知') + '），请检查 data/uploads 权限' });
+  if (!attachmentsEditable(report)) {
+    return res.status(400).json({ error: '该记录已提交或归档，附件已锁定，如需调整请联系审批负责人退回' });
   }
-  logAction(report.id, req.user, 'upload', `上传附件「${filename}」`);
-  res.json({ id: attId, filename, size: req.body.length });
+  const filename = safeName(req.query.name || '');
+  const dir = path.join(UPLOAD_ROOT, report.id);
+  fs.mkdirSync(dir, { recursive: true });
+  const tmp = path.join(dir, `.tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+  /* 流式落盘：边接收边写临时文件，超限即中止，不再整包缓冲 */
+  const { pipeline } = require('stream/promises');
+  const write = fs.createWriteStream(tmp);
+  let size = 0;
+  const counter = new (require('stream').Transform)({
+    transform(chunk, enc, cb) {
+      size += chunk.length;
+      if (size > ATTACH_LIMIT) { cb(new Error('ATTACH_TOO_LARGE')); return; }
+      cb(null, chunk);
+    }
+  });
+
+  (async () => {
+    let attId = null;
+    try {
+      await pipeline(req, counter, write);
+      if (!size) { fs.unlinkSync(tmp); return res.status(400).json({ error: '附件内容为空' }); }
+      const ins = run('INSERT INTO attachments (report_id, filename, size, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?)',
+        report.id, filename, size, req.user.id, now());
+      attId = Number(ins.lastInsertRowid);
+      fs.renameSync(tmp, path.join(dir, String(attId)));
+      logAction(report.id, req.user, 'upload', `上传附件「${filename}」`);
+      res.json({ id: attId, filename, size });
+    } catch (e) {
+      try { fs.unlinkSync(tmp); } catch (e2) { /* 已清理 */ }
+      if (attId) run('DELETE FROM attachments WHERE id = ?', attId);
+      if (e.message === 'ATTACH_TOO_LARGE') return res.status(413).json({ error: '附件超过 50MB 上限' });
+      console.error('[attachment] 接收失败:', e.message);
+      if (!res.headersSent) res.status(500).json({ error: '附件接收失败，请重试' });
+    }
+  })();
 });
 
 router.get('/reports/:id/attachments/:attId', (req, res) => {
@@ -85,6 +110,9 @@ router.get('/reports/:id/attachments/:attId', (req, res) => {
 router.delete('/reports/:id/attachments/:attId', (req, res) => {
   const report = get('SELECT * FROM reports WHERE id = ?', req.params.id);
   if (!report) return res.status(404).json({ error: '记录不存在' });
+  if (!attachmentsEditable(report)) {
+    return res.status(400).json({ error: '该记录已提交或归档，附件已锁定，如需调整请联系审批负责人退回' });
+  }
   const att = get('SELECT * FROM attachments WHERE id = ? AND report_id = ?', req.params.attId, report.id);
   if (!att) return res.status(404).json({ error: '附件不存在' });
   if (att.uploaded_by !== req.user.id && !can(req.user, 'report:delete')) {
@@ -107,7 +135,9 @@ router.get('/reports', requireAuth, (req, res) => {
   if (can(u, 'report:read')) {
     /* 全量可见，按条件过滤 */
   } else if (can(u, 'report:read:self')) {
-    where.push(selfScopeSql(u.id, roleKeysOf(u)));
+    const sc = selfScopeSql(u.id, roleKeysOf(u));
+    where.push(sc.sql);
+    params.push(...sc.params);
   } else {
     return res.status(403).json({ error: '没有查看评价台账的权限' });
   }
@@ -171,16 +201,20 @@ router.post('/reports', requirePerm('report:create'), (req, res) => {
   if (!data.org_id || !data.customer_id || !data.report_date) {
     return res.status(400).json({ error: '经办机构、上报日期、客户名称必填' });
   }
-  const id = nextId('reports', 'BG');
+  let id = nextId('reports', 'BG');
   const ts = now();
   const cols = ['org_id', 'report_date', 'customer_id', 'approved', 'amount', 'exposure_amount',
     'main_investigator', 'assistant_investigator', 'first_responsible',
     'score_sys', 'score_credit', 'score_asset', 'score_operate', 'score_purpose', 'score_guarantee',
     'return1', 'return2', 'return3', 'return4'];
   const values = cols.map((c) => data[c] !== undefined ? data[c] : null);
-  run(`INSERT INTO reports (id, ${cols.join(',')}, reviewer, status, created_by, created_at, updated_at)
-       VALUES (?, ${cols.map(() => '?').join(',')}, ?, 'draft', ?, ?, ?)`,
-    id, ...values, req.user.id, req.user.id, ts, ts);
+  retryOnUnique(() => {
+    const newId = nextId('reports', 'BG'); /* 重试时重新取号 */
+    run(`INSERT INTO reports (id, ${cols.join(',')}, reviewer, status, created_by, created_at, updated_at)
+         VALUES (?, ${cols.map(() => '?').join(',')}, ?, 'draft', ?, ?, ?)`,
+      newId, ...values, req.user.id, req.user.id, ts, ts);
+    id = newId;
+  });
   logAction(id, req.user, 'create', '登记评价记录（草稿）');
   res.json({ id });
 });

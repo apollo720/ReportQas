@@ -28,9 +28,10 @@ function invalidateDicts() {
    含客户经理角色 → 本人主调查的台账；含审批人员角色 → 本人审批的台账；两者皆有取并集 */
 function selfScopeSql(userId, roleKeys) {
   const conds = [];
-  if (roleKeys.includes('manager')) conds.push(`r.main_investigator = '${userId}'`);
-  if (roleKeys.includes('reviewer')) conds.push(`r.reviewer = '${userId}'`);
-  return conds.length ? `(${conds.join(' OR ')})` : '(1 = 0)';
+  const params = [];
+  if (roleKeys.includes('manager')) { conds.push('r.main_investigator = ?'); params.push(userId); }
+  if (roleKeys.includes('reviewer')) { conds.push('r.reviewer = ?'); params.push(userId); }
+  return { sql: conds.length ? `(${conds.join(' OR ')})` : '(1 = 0)', params };
 }
 
 /* 行序列化：id → 名称，附计算得分 */

@@ -172,6 +172,7 @@
         });
       });
       Vue.watch(filteredRows, function (l) { pagination.total = l.length; }, { immediate: true });
+      Vue.watch(keyword, function () { pagination.current = 1; });
 
       var columns = [
         { colKey: 'id', title: '报告编号', width: 130, fixed: 'left' },
@@ -295,7 +296,7 @@
       var columns = [
         { colKey: 'report_date', title: '上报日期', width: 108, fixed: 'left' },
         { colKey: 'customerName', title: '客户名称', width: 230, ellipsis: true, fixed: 'left' },
-        { colKey: 'orgName', title: '经办机构', width: 110 },
+        { colKey: 'orgName', title: '经办机构', width: 152 },
         { colKey: 'approved', title: '是否核额', width: 86, align: 'center' },
         { colKey: 'amount', title: '授信金额(万)', width: 118, align: 'right' },
         { colKey: 'exposure_amount', title: '敞口金额(万)', width: 110, align: 'right' },

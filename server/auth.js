@@ -10,6 +10,24 @@ const { MENUS } = require('./constants');
 
 const SESSION_MS = 60 * 60 * 1000; /* 会话有效期 1 小时 */
 const COOKIE_NAME = 'lrsid';
+const COOKIE_SECURE = process.env.LR_COOKIE_SECURE === '1'; /* HTTPS 部署时开启 */
+const LOGIN_FAIL_LIMIT = 5;   /* 同一 工号+IP 连续失败上限 */
+const LOGIN_LOCK_MS = 15 * 60 * 1000;
+
+/* 登录失败锁定（内存实现，重启即清）：同 工号+IP 连续失败 LOGIN_FAIL_LIMIT 次后临时锁定 */
+const loginFails = new Map();
+function loginLocked(key) {
+  const rec = loginFails.get(key);
+  if (!rec) return false;
+  if (Date.now() - rec.last >= LOGIN_LOCK_MS) { loginFails.delete(key); return false; }
+  return rec.count >= LOGIN_FAIL_LIMIT;
+}
+function recordLoginFail(key) {
+  const rec = loginFails.get(key) || { count: 0, last: 0 };
+  rec.count += 1; rec.last = Date.now();
+  loginFails.set(key, rec);
+}
+function clearLoginFails(key) { loginFails.delete(key); }
 
 /* ---------- 密码 ---------- */
 function hashPassword(password, salt) {
@@ -32,7 +50,7 @@ function createSession(res, employeeId) {
   run('INSERT INTO sessions (token, employee_id, created_at, expires_at) VALUES (?, ?, ?, ?)',
     token, employeeId, now(), expires.toISOString());
   res.setHeader('Set-Cookie',
-    `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MS / 1000}`);
+    `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MS / 1000}${COOKIE_SECURE ? '; Secure' : ''}`);
 }
 
 function destroySession(req, res) {
@@ -119,5 +137,6 @@ function requirePerm(...needed) {
 
 module.exports = {
   hashPassword, verifyPassword, createSession, destroySession,
-  resolveUser, buildUser, requireAuth, requirePerm, COOKIE_NAME
+  resolveUser, buildUser, requireAuth, requirePerm, COOKIE_NAME,
+  loginLocked, recordLoginFail, clearLoginFails
 };

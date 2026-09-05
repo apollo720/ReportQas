@@ -14,7 +14,12 @@ router.use(requireAuth, requirePerm('workflow:manage'));
 
 router.get('/workflow', (req, res) => {
   const nowMs = Date.now();
-  const dwell = (t) => t ? Math.max(0, Math.floor((nowMs - new Date(t.replace(' ', 'T') + 'Z').getTime()) / 86400e3)) : 0;
+  /* submit_time 兼容两种格式：完整 UTC ISO（带 Z）与旧格式 'YYYY-MM-DD HH:MM'（补 Z 按 UTC 解析） */
+  const dwell = (t) => {
+    if (!t) return 0;
+    const ms = new Date(/Z$/.test(t) ? t : t.replace(' ', 'T') + 'Z').getTime();
+    return Number.isFinite(ms) ? Math.max(0, Math.floor((nowMs - ms) / 86400e3)) : 0;
+  };
 
   const pending = all(`SELECT * FROM reports WHERE status = 'pending_review' ORDER BY submit_time`)
     .map(serialize)

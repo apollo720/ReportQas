@@ -273,10 +273,10 @@ router.post('/excel/import', express.raw({ type: () => true, limit: '20mb' }), r
       archived ? ts : null, archived ? ts : null, archived ? ts : null,
       req.user.id, ts, ts);
     logAction(id, req.user, 'import', 'Excel 导入' + (archived ? '（已归档）' : '（草稿）'));
-    invalidateDicts();
     imported += 1;
   });
 
+  if (imported) invalidateDicts();
   res.json({ imported, skipped, total: rows.length });
 });
 

@@ -199,4 +199,18 @@ function nextDailyId(table, col, prefix) {
   return head + String(seq).padStart(4, '0');
 }
 
-module.exports = { db, all, get, run, now, nextId, nextPlainId, nextDailyId, DB_PATH, DATA_DIR };
+/* 并发写入兜底：编号生成是"查最大值+1"，并发下可能撞唯一约束，重试时重新取号 */
+function retryOnUnique(fn, attempts = 3) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return fn();
+    } catch (e) {
+      lastErr = e;
+      if (!/UNIQUE constraint failed/.test(String(e.message))) throw e;
+    }
+  }
+  throw lastErr;
+}
+
+module.exports = { db, all, get, run, now, nextId, nextPlainId, nextDailyId, retryOnUnique, DB_PATH, DATA_DIR };
